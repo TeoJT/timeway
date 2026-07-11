@@ -2462,14 +2462,16 @@ public class Editor extends Screen {
           }
           
           if (!camera.error.get() && camera.ready.get()) {
-            if (ui.button("snap", "snap_button_128", "") || input.keyDownOnce(' ') || input.enterOnce) {
-              sound.playSound("select_snap");
-              stats.increase("photos_taken", 1);
-              insertImage(camera.updateImage());
-              
-              // Rest of the stuff is just for cosmetic effects :sparkle_emoji:
-              takePhoto = true;
-              cameraFlashEffect = 255.;
+            if (cameraFlashEffect <= 0f) {
+              if (ui.button("snap", "snap_button_128", "") || input.keyDownOnce(' ') || input.enterOnce) {
+                sound.playSound("select_snap");
+                stats.increase("photos_taken", 1);
+                insertImage(camera.updateImage());
+                
+                // Rest of the stuff is just for cosmetic effects :sparkle_emoji:
+                takePhoto = true;
+                cameraFlashEffect = 255.;
+              }
             }
             
             // TODO: Add some automatic "position at bottom" function to the messy class.

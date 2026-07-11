@@ -119,8 +119,6 @@ public class PixelRealm extends Screen {
   private int drawnEntries = 0;
   private int entriesTotal = 0;
   private int timeInRealm  = 0;
-  private float timeNotMoving = 0.;
-  //protected HashMap<Integer, PVector> tilesCache = new HashMap<Integer, PVector>();
   private float lastXBlockGetHeightAction = 0.;
   private float lastZBlockGetHeightAction = 0.;
   private boolean playingWarpingSound = false;
@@ -1276,7 +1274,6 @@ public class PixelRealm extends Screen {
         // Can't move files that have the same filename as another file
         // in the pocket.
         if (isDuplicate) {
-          console.log("isDuplicate");
           promptPocketConflict(name);
           return false;
         }
@@ -1292,7 +1289,6 @@ public class PixelRealm extends Screen {
         
         // Another duplicate check that is mostly temporary and I'll have a better solution soon.
         if (file.exists(engine.APPPATH+engine.POCKET_PATH()+newName)) {
-          console.log("genuine conflict");
           promptPocketConflict(newName);
           return false;
         }
@@ -2592,44 +2588,43 @@ public class PixelRealm extends Screen {
         // We expect the engine to have already loaded a JSON object.
         // Every 3d object has x y z position.
         
-        // Prepare random (but close to player) positioning if file previously did not exist
-        // in realm.
-        this.x = lastPlacedPosX+random(-500, 500);
-        this.z = lastPlacedPosZ+random(-500, 500);
         if (json.isNull("x") || json.isNull("z")) {
-          // Update last placed pos, but while we're here, we can
-          // check to see if this fileObject happens to be the exitportal.
-          // If so its position should be the exitportal position that was 
-          // randomly allocated
-          lastPlacedPosX = this.x;
-          lastPlacedPosZ = this.z;
+          // Semi-random-ish position.
+          this.x = lastPlacedPosX+random(-500, 500);
+          this.z = lastPlacedPosZ+random(-500, 500);
           
-          // Expensive operation so let's do it here.
-          // Check if object is within bounds. 
-          // (if you're wondering, objects are loaded AFTER chunks are loaded)
-          // If not, reposition to somewhere that hopefully is within bounds.
-          // TODO: split it through multiple frames if we have loads of files
-          // to avoid stutter.
+          // We don't want it to be out of bounds
           int count = 0;
           while (outOfBounds(this.x, this.z)) {
-            this.x = random(-10000, 10000);
-            this.z = random(-10000, 10000);
+            this.x = lastPlacedPosX+random(-500, 500);
+            this.z = lastPlacedPosZ+random(-500, 500);
             count++;
-            if (count > 1000) {
-              console.warn("Couldn't relocate item cus we ain't smart enough.");
+            if (count > 100) {
+              console.bugWarn("fileLoad: failed to position object within bounds. The chances of this happening should be almost impossible.");
+              
+              this.x = lastPlacedPosX;
+              this.z = lastPlacedPosZ;
               break;
             }
           }
-          surface();
+        
+          // Save for the next object we place.
+          lastPlacedPosX = this.x;
+          lastPlacedPosZ = this.z;
           
+          // If this is the exit portal, use exit portal's posoition instead.
           if (this == exitPortal) {
             this.x = exitPortalX;
             this.z = exitPortalZ;
           }
         }
+        else {
+          this.x = json.getFloat("x");
+          this.z = json.getFloat("z");
+        }
         
-        this.x = json.getFloat("x", this.x);
-        this.z = json.getFloat("z", this.z);
+        surface();
+        
         this.size = json.getFloat("scale", 1.)*BACKWARD_COMPAT_SCALE;
         
         // Update lastPlacedPos so that initing items can be placed near the portal.
@@ -2671,14 +2666,9 @@ public class PixelRealm extends Screen {
         files.remove(this);
       }
       
-      public void scaleUp(float amount) {
-        // Use a curve to make it scale a little when small and scale a lot when larger
-        setSize(size+max((amount*amount), 0.001));
-      }
-      
-      public void scaleDown(float amount) {
-        // Use a curve to make it scale a little when small and scale a lot when larger
-        setSize(size-max((amount*amount), 0.001));
+      @Override
+      public boolean canResize() {
+        return false;
       }
       
       public void addRequestToQueueWithNoCaching(final String path) {
@@ -3137,7 +3127,7 @@ public class PixelRealm extends Screen {
             renderedEntry.endSoftwareDraw();
             img = new RealmTextureUV(renderedEntry.getSoftwareRenderedCanvas());
             
-            setSize(0.5);
+            setSize(size);
             
             // Don't care about these two anymore
             if (entryToReload == null) {
@@ -3199,6 +3189,11 @@ public class PixelRealm extends Screen {
         
         this.myOrderingNode.val = val1 > val2 ? val1 : val2;
       }
+      
+      @Override
+      public boolean canResize() {
+        return true;
+      }
   
       public void display() {
         if (visible) {
@@ -3247,16 +3242,17 @@ public class PixelRealm extends Screen {
               
               if (element == null || elementRefreshRequired) {
                 if (bugFixUpsideDown) {
-                  element = new GLQuadElement(img, 0, wi, -hi);
+                  element = new GLQuadElement(img, 0, img.getWidth(), -img.getHeight());
                 }
                 else {
-                  element = new GLQuadElement(img, 0, wi, hi);
+                  element = new GLQuadElement(img, 0, img.getWidth(), img.getHeight());
                 }
                 
                 elementRefreshRequired = false;
               }
                
-              displayQuad(element, x, y, z, rot-HALF_PI);
+              // Multiply the size by two for backward compatibility.
+              displayQuad(element, x, y, z, rot-HALF_PI, size);
               
               if (unifiedShader != null && allowTexFlipping) {
                 unifiedShader.set("flipTexture", false);
@@ -3324,8 +3320,6 @@ public class PixelRealm extends Screen {
   
   
   
-  
-    private int totalVideosLoaded = 0;
   
     class VideoFileObject extends ImageFileObject {
       private boolean movieEnabled = false;
@@ -3650,6 +3644,11 @@ public class PixelRealm extends Screen {
         this.hitboxWi = wi*0.5;
       }
       
+      @Override
+      public boolean canResize() {
+        return false;
+      }
+      
       public void requestRealmSky(String d) {
         // Normal (single) sky or
         String sky = file.anyImageFile(d+"/"+REALM_SKY);
@@ -3858,6 +3857,10 @@ public class PixelRealm extends Screen {
       public void surface() {
         y = onSurface(x, z);
       }
+      
+      public boolean canResize() {
+        return false;
+      }
   
       public boolean touchingPlayer() {
         float spw = PLAYER_WIDTH*0.5;
@@ -4026,7 +4029,7 @@ public class PixelRealm extends Screen {
         return !dontRender;
       }
       
-      protected void displayQuad(GLQuadElement element, float x, float y, float z, float rotation) {
+      protected void displayQuad(GLQuadElement element, float x, float y, float z, float rotation, float scale) {
         if (element == null) return;
   
         boolean render = preRenderCheck(x, z);
@@ -4037,6 +4040,7 @@ public class PixelRealm extends Screen {
           
           scene.translate(x, y, z);
           scene.rotateY(rotation);
+          scene.scale(scale);
           
           unifiedShader.setCommonUniforms();
           
@@ -4722,6 +4726,19 @@ public class PixelRealm extends Screen {
       }
     }
     
+    private void callObjectsLoad() {
+        // None of the objects are loaded from file but we still need to
+        // call load() since this contains code to init the objects.
+        // We need a blank jsonobject to make each fileobject think it hasn't
+        // existed in the realm before.
+        JSONObject emptyJSON = new JSONObject();
+        for (FileObject o : files) {
+          if (o != null) {
+            o.load(emptyJSON);
+          }
+        }
+    }
+    
     public void loadRealmTerrain(String dir) {
       // Find out if the directory has a turf file.
       JSONObject jsonFile = null;
@@ -4743,6 +4760,7 @@ public class PixelRealm extends Screen {
           else {
             console.warn("There's an error in the folder's turf file (exception).");
           }
+          callObjectsLoad();
           //saveRealmJson();
           return;
         }
@@ -4756,6 +4774,7 @@ public class PixelRealm extends Screen {
           else {
             console.warn("There's an error in the folder's turf file (null).");
           }
+          callObjectsLoad();
           //saveRealmJson();
           return;
         }
@@ -4800,12 +4819,11 @@ public class PixelRealm extends Screen {
         }
         // Unknown version.
         else {
-          console.log(dir.replaceAll("\\\\", "/"));
-          console.log(engine.TEMPLATES_PATH());
           if (dir.replaceAll("\\\\", "/").indexOf(engine.TEMPLATES_PATH()) == -1) {
             console.log("Incompatible turf file, backing up old and creating new turf.");
             file.backupMove(dir+realm_turf);
             issueRefresherCommand(REFRESHER_PAUSE);
+            callObjectsLoad();
             saveRealmJson();
           }
         }
@@ -4842,20 +4860,7 @@ public class PixelRealm extends Screen {
           stats.increase("new_realms_created", 1);
         }
         
-        if (loadMinimal) return;
-        
-        // TODO: I have no idea why this was here??? Remove??? How did nothing break????????
-        
-        // None of the objects are loaded from file but we still need to
-        // call load() since this contains code to init the objects.
-        // We need a blank jsonobject to make each fileobject think it hasn't
-        // existed in the realm before.
-        //JSONObject emptyJSON = new JSONObject();
-        //for (FileObject o : files) {
-        //  if (o != null) {
-        //    o.load(emptyJSON);asdf
-        //  }
-        //}
+        callObjectsLoad();
       }
       
     }
@@ -5743,14 +5748,6 @@ public class PixelRealm extends Screen {
                 //  sound.playSound("water_jump", random(1.9, 2.5));
                 //else
               }
-              
-              
-              timeNotMoving = 0; 
-            }
-            else {
-              if (!input.keyAction("turn_right", 'e') && !input.keyAction("turn_left", 'q') && !input.keyAction("jump", ' ') && !input.keyAction("primary_action", 'o')) {
-                timeNotMoving += display.getDelta();
-              }
             }
           
           cache_flatSinDirection = sin(direction-PI+HALF_PI);
@@ -5828,8 +5825,8 @@ public class PixelRealm extends Screen {
           
           if (onGround()) {
             playerY = onSurface(playerX, playerZ);
-            yvel = 0.;
-            coyoteJump = 9.;
+            yvel = 0f;
+            coyoteJump = 9f;
             //console.log(playerY-prevYPos);
           }
           else if (splash) {
@@ -5867,56 +5864,46 @@ public class PixelRealm extends Screen {
           isUnderwater = playerY+(sin(bob)*3.)-PLAYER_HEIGHT-1. > terrain.waterLevel && !outOfBounds(playerX, playerZ) && terrain.hasWater;
           if (isUnderwater) stats.recordTime("time_underwater");
           
-          // If holding an item, allow scaling up and down.
-          //if (inventorySelectedItem != null) {
-          //  if (engine.keyAction("scaleUp")) {
-          //    inventorySelectedItem.carrying.scaleUp(0.10*display.getDelta());
-          //  }
-          //  if (engine.keyAction("scaleDown")) {
-          //    inventorySelectedItem.carrying.scaleDown(0.10*display.getDelta());
-          //  }
-          //  if (engine.keyAction("scaleUpSlow")) {
-          //    inventorySelectedItem.carrying.scaleUp(0.03*display.getDelta());
-          //  }
-          //  if (engine.keyAction("scaleDownSlow")) {
-          //    inventorySelectedItem.carrying.scaleDown(0.03*display.getDelta());
-          //  }
-          //}
           
-          
-          // Sorry for the cluster of code but if you read it it's really simpleeeeeeeee
-          //if (globalHoldingObjectSlot != null) {
-          //  if (input.keyActionOnce("inventory_select_left", ',') && globalHoldingObjectSlot.prev != null) {
-          //    launchWhenPlaced = false;
-          //    globalHoldingObjectSlot = globalHoldingObjectSlot.prev;
-          //    updateHoldingItem(globalHoldingObjectSlot);
-          //    sound.playSound("pickup");
-          //  }
+          if (currentTool == TOOL_GRABBER) {
+            if (input.keyActionOnce("inventory_select_left", ',') && holdingItemIndex > 0 && holdingItemIndex < hotbar.size()) {
+              launchWhenPlaced = false;
+              updateHoldingItem(holdingItemIndex-1);
+              sound.playSound("pickup");
+            }
+            if (input.keyActionOnce("inventory_select_right", '.') && holdingItemIndex < hotbar.size()-1) {
+              launchWhenPlaced = false;
+              updateHoldingItem(holdingItemIndex+1);
+              sound.playSound("pickup");
+            }
             
-          //  if (input.keyActionOnce("inventory_select_right", '.') && globalHoldingObjectSlot.next != null) {
-          //    launchWhenPlaced = false;
-          //    globalHoldingObjectSlot = globalHoldingObjectSlot.next;
-          //    updateHoldingItem(globalHoldingObjectSlot);
-          //    sound.playSound("pickup");
-          //  }
-          //}
-          
-          if (getHoldingItem() != null) {
+            if (getHoldingItem() != null && getHoldingItem().item != null && getHoldingItem().item.canResize()) {
+              PRObject holdingItem = getHoldingItem().item;
             
+              final float MAX_ITEM_SIZE = 2f;
+              final float MIN_ITEM_SIZE = 0.1f;
+              
+              handleGrowShrinkSounds();
+              
+              float itemSize = holdingItem.size;
+              
+              // Actual control handle
+              if (input.keyAction("scale_up", '=') && itemSize <= MAX_ITEM_SIZE) {
+                itemSize *= pow(1.01, display.getDelta());
+                holdingItem.setSize(itemSize);
+              }
+              else if (input.keyAction("scale_down", '-') && itemSize > MIN_ITEM_SIZE) {
+                itemSize *= pow(0.99, display.getDelta());
+                holdingItem.setSize(itemSize);
+              }
+              else if (itemSize < MAX_ITEM_SIZE || itemSize > MIN_ITEM_SIZE) {
+                sound.stopSound("grow");
+                sound.stopSound("shrink");
+              }
+            }
           }
           
-          if (input.keyActionOnce("inventory_select_left", ',') && holdingItemIndex > 0 && holdingItemIndex < hotbar.size()) {
-            launchWhenPlaced = false;
-            updateHoldingItem(holdingItemIndex-1);
-            sound.playSound("pickup");
-          }
-          if (input.keyActionOnce("inventory_select_right", '.') && holdingItemIndex < hotbar.size()-1) {
-            launchWhenPlaced = false;
-            updateHoldingItem(holdingItemIndex+1);
-            sound.playSound("pickup");
-          }
-          
-          if (currentTool == TOOL_GARDENER) {
+          else if (currentTool == TOOL_GARDENER) {
             
             // Display tree preview
             if (previewTree == null) {
@@ -5973,11 +5960,11 @@ public class PixelRealm extends Screen {
               handleGrowShrinkSounds();
               
               // Actual control handle
-              if (input.keyAction("scale_up", '=') && manualTreeSize <= 35f) {
+              if (input.keyAction("scale_up", '=') && manualTreeSize <= MAX_TREE_SIZE) {
                 manualTreeSize *= pow(1.01, display.getDelta());
                 previewTree.setSize(manualTreeSize);
               }
-              else if (input.keyAction("scale_down", '-') && manualTreeSize > 0.1f) {
+              else if (input.keyAction("scale_down", '-') && manualTreeSize > MIN_TREE_SIZE) {
                 manualTreeSize *= pow(0.99, display.getDelta());
                 previewTree.setSize(manualTreeSize);
               }
@@ -7047,30 +7034,32 @@ public class PixelRealm extends Screen {
       
       // Growing trees
       if (currentTool == TOOL_GARDENER && primaryAction && !movementPaused) {
-        sound.playSound("tree_grow");
-        stats.increase("trees_grown", 1);
-        
-        float size = nextRandomTreeSize;
-        int index = nextRandomTreeIndex;
-        if (subTool != 0) {
-          size = manualTreeSize;
-          index = manualTreeIndex;
-        }
-        
-        TerrainPRObject tree = new TerrainPRObject(
-                cursorX, 
-                onSurface(cursorX, cursorZ),
-                cursorZ, 
-                size
-        );
-        tree.setImgIndex(index);
-        tree.grow = 0f;
-        
-        if (subTool == 0) {
-          nextRandomTreeSize = random(3f, 7f);
-          nextRandomTreeIndex = int(random(0, 9));
-          previewTree.setSize(nextRandomTreeSize);
-          previewTree.setImgIndex(nextRandomTreeIndex);
+        if (!outOfBounds(cursorX, cursorZ)) {
+          sound.playSound("tree_grow");
+          stats.increase("trees_grown", 1);
+          
+          float size = nextRandomTreeSize;
+          int index = nextRandomTreeIndex;
+          if (subTool != 0) {
+            size = manualTreeSize;
+            index = manualTreeIndex;
+          }
+          
+          TerrainPRObject tree = new TerrainPRObject(
+                  cursorX, 
+                  onSurface(cursorX, cursorZ),
+                  cursorZ, 
+                  size
+          );
+          tree.setImgIndex(index);
+          tree.grow = 0f;
+          
+          if (subTool == 0) {
+            nextRandomTreeSize = random(3f, 7f);
+            nextRandomTreeIndex = int(random(0, 9));
+            previewTree.setSize(nextRandomTreeSize);
+            previewTree.setImgIndex(nextRandomTreeIndex);
+          }
         }
       }
       

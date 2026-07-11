@@ -54,7 +54,7 @@ import javax.sound.sampled.*;
 public class TWEngine {
   //*****************CONSTANTS SETTINGS**************************
   // Info and versioning
-  private static final String VERSION     = "0.2.1";
+  private static final String VERSION     = "0.2.2";
   
   public String getAppName() {
     return "Timeway";
@@ -7043,9 +7043,7 @@ public class TWEngine {
               // We continue to load original and recreate the cache.
             }
           }
-          else {
-            console.warn("what");
-          }
+          // This specific point is if the image fails to load.
         }
       }
   
