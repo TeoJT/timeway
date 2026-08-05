@@ -106,6 +106,7 @@ public class TWEngine {
   public String STATS_FILE() { return "stats.json"; }
   public String PATH_SPRITES_ATTRIB() { return "engine/spritedata/"; }
   public String CACHE_INFO() { return "cache_info.json"; }
+  public String ICONS_PATH() { return "icons/"; }
 
   // Static constants
   public static final float   KEY_HOLD_TIME       = 30.; // 30 frames
@@ -122,9 +123,9 @@ public class TWEngine {
   public       String DEFAULT_FONT_NAME = "Typewriter";
 
   
-  public final String SKETCHIO_EXTENSION = "sketchio";
-  public final String ENTRY_EXTENSION = "timewayentry";
-  public final String SHORTCUT_EXTENSION = "timewayshortcut";
+  public String SKETCHIO_EXTENSION() { return "sketchio"; }
+  public String ENTRY_EXTENSION() { return "timewayentry"; }
+  public String SHORTCUT_EXTENSION() { return "timewayshortcut"; }
 
 
   //*************************************************************
@@ -587,6 +588,7 @@ public class TWEngine {
     // You shouldn't call this every frame
     public void setAwake() {
       sleepyMode = false;
+      Thread.dumpStack();
       if (getPowerMode() == PowerMode.SLEEPY) {
         putFPSSystemIntoGraceMode();
         setPowerMode(powerModeBefore);
@@ -2186,7 +2188,7 @@ public class TWEngine {
           valFloat = min+((mouseX()-x-CONTROL_X)/(wi-CONTROL_X))*(max-min);
           valFloat = min(max(valFloat, min), max);
           float percentage = valFloat/max;     // Used for sound.
-          sound.setSoundVolume("scroller", min(pow(abs(percentage-percentBefore)*200f, 2f), 1.0f));
+          sound.setSoundVolume("scroller", percentage != percentBefore ? 1f : 0f);
           power.setAwake();
         }
         else if (usingNode == null) {
@@ -2901,6 +2903,12 @@ public class TWEngine {
       if (streamerMusicFadeTo != null) {
         streamerMusicFadeTo.close();
         streamerMusicFadeTo = null;
+      }
+    }
+    
+    public void musicLoadForceWait() {
+      while (!sound.musicReady()) {
+        delay(50);
       }
     }
     
@@ -3823,6 +3831,10 @@ public class TWEngine {
       return (new File(path)).isDirectory();
     }
     
+    public boolean isFile(String path) {
+      return (new File(path)).isFile();
+    }
+    
     // TODO: optimise to be safe and for use with MacOS and Linux.
     public String getPrevDir(String dir) {
       dir = dir.replaceAll("\\\\", "/");
@@ -4088,7 +4100,22 @@ public class TWEngine {
       return false;
     }
   
-  
+    public String[] listFiles(String dirpath) {
+      // Verification check
+      if (!isDirectory(dirpath)) {
+        String[] emptyString = new String[1];
+        emptyString[0] = "";
+        console.bugWarn("listFiles: Trying to read a file instead of a directory.");
+        return emptyString;
+      }
+      
+      File[] pocketFolder = (new File(dirpath)).listFiles();
+      String[] paths = new String[pocketFolder.length];
+      for (int i = 0; i < paths.length; i++) {
+        paths[i] = pocketFolder[i].getAbsolutePath().replaceAll("\\\\", "/");
+      }
+      return paths;
+    }
   
     public String typeToIco(FileType type) {
       switch (type) {
@@ -4140,7 +4167,7 @@ public class TWEngine {
         
       if (ext.equals("pdf")) return FileType.FILE_TYPE_PDF;
         
-      if (ext.equals(ENTRY_EXTENSION))
+      if (ext.equals(ENTRY_EXTENSION()))
         return FileType.FILE_TYPE_TIMEWAYENTRY;
         
       if (ext.equals("sketchio"))
@@ -4157,7 +4184,7 @@ public class TWEngine {
         
       if (ext.equals("obj")) return FileType.FILE_TYPE_MODEL;
       
-      if (ext.equals(SHORTCUT_EXTENSION)) return FileType.FILE_TYPE_SHORTCUT;
+      if (ext.equals(SHORTCUT_EXTENSION())) return FileType.FILE_TYPE_SHORTCUT;
   
       return FileType.FILE_TYPE_UNKNOWN;
     }
@@ -4257,7 +4284,7 @@ public class TWEngine {
                 else currentFiles[index].icon = extIcon(currentFiles[index].fileext);
   
                 // Just a piece of code plonked in for the entries part
-                if (currentFiles[index].fileext.equals(ENTRY_EXTENSION)) numTimewayEntries++;
+                if (currentFiles[index].fileext.equals(ENTRY_EXTENSION())) numTimewayEntries++;
                 index++;
               }
             }
@@ -4292,18 +4319,17 @@ public class TWEngine {
     }
     
     public int countFiles(String path) {
-        File folder = new File(path);
-        if (!folder.exists() || !folder.isDirectory())
+        if (!exists(path) || !isDirectory(path))
             return 1;
             
         int count = 0;
-        File[] files = folder.listFiles();
+        String[] files = listFiles(path);
         if (files != null) {
-            for (File file : files) {
-                if (file.isFile()) {
+            for (String file : files) {
+                if (isFile(file)) {
                     count++;
-                } else if (file.isDirectory()) {
-                    count += countFiles(file.getAbsolutePath()); // Recursively count files in subfolders
+                } else if (isDirectory(file)) {
+                    count += countFiles(file); // Recursively count files in subfolders
                 }
             }
         }
@@ -4319,10 +4345,10 @@ public class TWEngine {
       
       String ext = getExt(filePath);
       // Stuff to open with our own app (timeway)
-      if (ext.equals(ENTRY_EXTENSION)) {
+      if (ext.equals(ENTRY_EXTENSION())) {
         twengineRequestEditor(filePath);
       }
-      else if (ext.equals(SKETCHIO_EXTENSION)) {
+      else if (ext.equals(SKETCHIO_EXTENSION())) {
         twengineRequestSketch(filePath);
       }
   
@@ -4336,7 +4362,7 @@ public class TWEngine {
   
     public void open(DisplayableFile file) {
       String path = file.path;
-      if (getExt(path).equals(SKETCHIO_EXTENSION)) {
+      if (getExt(path).equals(SKETCHIO_EXTENSION())) {
         twengineRequestSketch(path);
       }
       else if (file.isDirectory()) {
@@ -4354,7 +4380,7 @@ public class TWEngine {
       
       String ext = getExt(path);
       // Stuff to open with our own app (timeway)
-      if (ext.equals(ENTRY_EXTENSION)) {
+      if (ext.equals(ENTRY_EXTENSION())) {
         twengineRequestReadonlyEditor(path);
       }
       else {
@@ -4634,7 +4660,7 @@ public class TWEngine {
       if (ext.equals("png")) {
         return getPNGUncompressedSize(path);
       }
-      else if (ext.equals(ENTRY_EXTENSION) || ext.equals("pdf")) {
+      else if (ext.equals(ENTRY_EXTENSION()) || ext.equals("pdf")) {
         return 0;
       }
       else if (ext.equals("jpg") || ext.equals("jpeg")) {
@@ -5428,15 +5454,13 @@ public class TWEngine {
     loadAllAssets(APPPATH+IMG_PATH()+"loadingmorph/");
     // We need to load shaders on the main thread.
     loadAllAssets(APPPATH+SHADER_PATH());
-    // Find out how many images there are in loadingmorph
-    File f = new File(APPPATH+IMG_PATH()+"loadingmorph/");
     
     // Idc
     if (isAndroid()) {
       display.loadingFramesLength = 84;
     }
     else {
-      display.loadingFramesLength = f.listFiles().length;
+      display.loadingFramesLength = file.countFiles(APPPATH+IMG_PATH()+"loadingmorph/");
     }
     loadAsset(APPPATH+DEFAULT_FONT_PATH());
     
@@ -7349,7 +7373,8 @@ public class TWEngine {
     
     public int cursorX = 0;
     public String CURSOR_CHAR = "";
-    private char characterFired = 0;
+    private char[] charactersFired = new char[128];
+    private int charactersFiredIndex = 0;
     
     //public String keyboardMessage = "";
     
@@ -7430,6 +7455,7 @@ public class TWEngine {
     public static final char RIGHT_KEY = 17;
     public static final char UP_KEY = 12;
     public static final char DOWN_KEY = 16;
+    public static final char BACKSPACE_KEY = 18;
     
     
     public InputModule() {
@@ -7603,6 +7629,10 @@ public class TWEngine {
       rawScroll = 0.;
     }
     
+    public void runLateInputManagement() {
+      charactersFiredIndex = 0;
+    }
+    
     
     public void accidentalClickPrevention() {
       accidentalClickPreventionTimer = 2;
@@ -7640,74 +7670,77 @@ public class TWEngine {
       }
       
       if (keyFired) {
-        if (leftDown) { 
-          cursorX--;
-          if (ctrlDown) {
-            boolean traversed = false;
-            while (ctrlTraversable(str)) {
-              cursorX--;
-              traversed = true;
-            }
-            if (traversed) cursorX++;
-          }
-        }
-        else if (rightDown) {
-          cursorX++;
-          if (ctrlDown) {
-            while (ctrlTraversable(str)) {
-              cursorX++;
+        for (int i = 0; i < charactersFiredIndex; i++) {
+          if (charactersFired[i] == LEFT_KEY) { 
+            cursorX--;
+            if (ctrlDown) {
+              boolean traversed = false;
+              while (ctrlTraversable(str)) {
+                cursorX--;
+                traversed = true;
+              }
+              if (traversed) cursorX++;
             }
           }
-        }
-        else if (upDown) { 
-          // Start of current line
-          int startOfCurrLine = str.lastIndexOf('\n', cursorX)+1;
-          int dist = cursorX-startOfCurrLine;
+          else if (charactersFired[i] == RIGHT_KEY) {
+            cursorX++;
+            if (ctrlDown) {
+              while (ctrlTraversable(str)) {
+                cursorX++;
+              }
+            }
+          }
+          else if (charactersFired[i] == UP_KEY) { 
+            // Start of current line
+            int startOfCurrLine = str.lastIndexOf('\n', cursorX)+1;
+            int dist = cursorX-startOfCurrLine;
+            
+            // start of prev line
+            int startOfPrevLine = str.lastIndexOf('\n', startOfCurrLine-2)+1;
+            
+            // Let's say for example you move your cursor like this:
+            //
+            // short
+            // A longer mess|ge hello world
+            // 
+            // short|
+            // A longer message hello world
+            //
+            // As you can see, "short" is not long enough to plonk the cursor into the new position,
+            // so it gets put at the start.
+            if (startOfCurrLine-startOfPrevLine < dist) {
+              cursorX = startOfCurrLine-1;
+            }
+            else {
+              cursorX = startOfPrevLine+dist;
+            }
+          }
+          else if (charactersFired[i] == DOWN_KEY) {
+            // Start of current line
+            int startOfThisLine = str.lastIndexOf('\n', cursorX-1)+1;
+            int startOfNextLine = str.indexOf('\n', cursorX)+1;
+            if (startOfNextLine != 0) {
+              int dist = cursorX-startOfThisLine;
+              cursorX = startOfNextLine+dist;
+            }
+          }
+          else if (charactersFired[i] == BACKSPACE_KEY) {
+            str = backspace(str);
+          }
+          else if (enterDown) {
+            if (includeEnter) {
+              str = insert(str, '\n');
+            }
+          }
+          else if (charactersFired[i] >= 32 && charactersFired[i] != 127) {
+            str = insert(str, charactersFired[i]);
+            charactersFired[i] = 0;
+          }
+          else solidifyBlink = false;
           
-          // start of prev line
-          int startOfPrevLine = str.lastIndexOf('\n', startOfCurrLine-2)+1;
-          
-          // Let's say for example you move your cursor like this:
-          //
-          // short
-          // A longer mess|ge hello world
-          // 
-          // short|
-          // A longer message hello world
-          //
-          // As you can see, "short" is not long enough to plonk the cursor into the new position,
-          // so it gets put at the start.
-          if (startOfCurrLine-startOfPrevLine < dist) {
-            cursorX = startOfCurrLine-1;
-          }
-          else {
-            cursorX = startOfPrevLine+dist;
-          }
         }
-        else if (downDown) { 
-          // Start of current line
-          int startOfThisLine = str.lastIndexOf('\n', cursorX-1)+1;
-          int startOfNextLine = str.indexOf('\n', cursorX)+1;
-          if (startOfNextLine != 0) {
-            int dist = cursorX-startOfThisLine;
-            cursorX = startOfNextLine+dist;
-          }
-        }
-        else if (backspaceDown) {
-          str = backspace(str);
-        }
-        else if (enterDown) {
-          if (includeEnter) {
-            str = insert(str, '\n');
-          }
-        }
-        else if (characterFired >= 32 && characterFired != 127) {
-          str = insert(str, characterFired);
-          characterFired = 0;
-        }
-        else solidifyBlink = false;
-        
         keyFired = false;
+        charactersFiredIndex = 0;
       }
       else {
         solidifyBlink = false;
@@ -8078,7 +8111,7 @@ public class TWEngine {
          localScroll = 0f;
       }
       
-      if (localScroll != 0.0) {
+      if (localScroll > 0.001f || localScroll < -0.001f) {
         power.setAwake();
       }
       else {
@@ -8139,46 +8172,55 @@ public class TWEngine {
           case CONTROL:
             ctrlDown = true;
             lastKeyPressed = CTRL_KEY;
+            charactersFired[charactersFiredIndex++] = CTRL_KEY;
             return;
           case SHIFT:
             shiftDown = true;
             lastKeyPressed = SHIFT_KEY;
+            charactersFired[charactersFiredIndex++] = SHIFT_KEY;
             break;
           case ALT:
             altDown = true;
             lastKeyPressed = ALT_KEY;
+            charactersFired[charactersFiredIndex++] = ALT_KEY;
             return;
           case 19:      // ALT GR  
             altgrDown = true;
             lastKeyPressed = ALTGR_KEY;
+            charactersFired[charactersFiredIndex++] = ALTGR_KEY;
             return;
           case LEFT:
             leftDownCounter = 0;
             leftDown = true;
             keyFired = true;
             lastKeyPressed = LEFT_KEY;
+            charactersFired[charactersFiredIndex++] = LEFT_KEY;
             break;
           case RIGHT:
             rightDownCounter = 0;
             rightDown = true;
             keyFired = true;
             lastKeyPressed = RIGHT_KEY;
+            charactersFired[charactersFiredIndex++] = RIGHT_KEY;
             break;
           case UP:
             upDownCounter = 0;
             upDown = true;
             keyFired = true;
             lastKeyPressed = UP_KEY;
+            charactersFired[charactersFiredIndex++] = UP_KEY;
             break;
           case DOWN:
             downDownCounter = 0;
             downDown = true;
             keyFired = true;
             lastKeyPressed = DOWN_KEY;
+            charactersFired[charactersFiredIndex++] = DOWN_KEY;
             break;
           case BACKSPACE:
             backspaceDown = true;
             keyFired = true;
+            charactersFired[charactersFiredIndex++] = BACKSPACE_KEY;
             break;
           case 77:  // Glitchy key which isn't supposed to do anything.
             
@@ -8186,7 +8228,7 @@ public class TWEngine {
         // 10 for android
       } else if ((kkey == ENTER || kkey == RETURN || int(kkey) == 10) && !ctrlDown) {
         if (this.addNewlineWhenEnterPressed) {
-          characterFired = '\n';
+          charactersFired[charactersFiredIndex++] = '\n';
         }
         enterDown = true;
         keyFired = true;
@@ -8197,7 +8239,7 @@ public class TWEngine {
       //  backspaceDown = true;
       //}
       else if (kkey != 9) {
-        characterFired = kkey;
+        charactersFired[charactersFiredIndex++] = kkey;
         keyFired = true;
       }
       
@@ -8623,6 +8665,8 @@ public class TWEngine {
     stats.increase("total_frames_timeway", 1);
     
     display.forceDelta(-1f);
+    
+    input.runLateInputManagement();
   }
   
 }

@@ -375,8 +375,15 @@
   
 //}
 
+//@SuppressWarnings("unused")
+//public void pixelDensity(int pixeldensity) {
+  
+//}
 
-
+//@SuppressWarnings("unused")
+//public void setTitle(String title) {
+  
+//}
 
 
 

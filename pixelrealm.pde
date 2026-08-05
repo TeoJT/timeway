@@ -89,7 +89,7 @@ public class PixelRealm extends Screen {
   public final static String REALM_TREE_LEGACY  = ".pixelrealm-terrain_object";
   public final static String REALM_TREE  = ".pixelrealm-tree";
   public final static String REALM_BGM   = ".pixelrealm-bgm";
-  public final static String REALM_TURF  = ".pixelrealm-turf.json";
+  public final static String REALM_DATA  = ".pixelrealm-turf.json";
   public final static String REALM_BGM_DEFAULT = "engine/music/pixelrealm_default_bgm.wav";
   public final static String REALM_PLUGIN = ".pixelrealm-plugin.java";
   
@@ -151,6 +151,7 @@ public class PixelRealm extends Screen {
   private float bob = 0.0;
   private float jumpTimeout = 0;
   private float coyoteJump = 0.;
+  private float nonMovingTime = 0f;
   private boolean showExperimentalGifs = false;
   protected boolean launchWhenPlaced = false; 
   protected int     currentTool = TOOL_NORMAL;
@@ -1223,7 +1224,13 @@ public class PixelRealm extends Screen {
       
       if (item instanceof PixelRealmState.DirectoryPortal) {
         float pixelreswi = float(ico.height)/float(ico.width);
-        display.shader("portal_pockets", "u_time", display.getTimeSecondsLoop(), "pixelRes", pixelreswi, 1f);
+        
+        if (item instanceof PixelRealmState.ShortcutPortal) {
+          display.shader("portal_pockets", "u_time", display.getTimeSecondsLoop(), "pixelRes", pixelreswi, 1f, "tintColor", 150f/255f, 1f, 1f, 1f);
+        }
+        else {
+          display.shader("portal_pockets", "u_time", display.getTimeSecondsLoop(), "pixelRes", pixelreswi, 1f, "tintColor", 1f, 1f, 1f, 1f);
+        }
         app.image(ico, x, y, wihi, wihi);
         display.resetShader();
       }
@@ -1506,7 +1513,8 @@ public class PixelRealm extends Screen {
     public RealmTextureClassic  img_sky   = new RealmTextureClassic (REALM_SKY_DEFAULT);
     protected TerrainAttributes terrain;
     private DirectoryPortal exitPortal = null;
-    private String musicPath = engine.APPPATH+REALM_BGM_DEFAULT;
+    private String musicPath = "";
+    private String musicLastModified = "";
     private boolean loadMinimal = false;
     public boolean memOverload = false;
     private TWEngine.PluginModule.Plugin realmPlugin;
@@ -2589,6 +2597,17 @@ public class PixelRealm extends Screen {
         // Every 3d object has x y z position.
         
         if (json.isNull("x") || json.isNull("z")) {
+          
+          // Typically if this is true, this means last item placed there was out in the void.
+          // Reset the position to where there's guarenteed to be land.
+          if (outOfBounds(lastPlacedPosX, lastPlacedPosZ)) {
+            lastPlacedPosX = 0f;
+            lastPlacedPosZ = 0f;
+            if (outOfBounds(lastPlacedPosX, lastPlacedPosZ)) {
+              console.bugWarn("fileLoad: Tried to reset file positioning state, but is still out of bounds.");
+            }
+          }
+          
           // Semi-random-ish position.
           this.x = lastPlacedPosX+random(-500, 500);
           this.z = lastPlacedPosZ+random(-500, 500);
@@ -2596,8 +2615,14 @@ public class PixelRealm extends Screen {
           // We don't want it to be out of bounds
           int count = 0;
           while (outOfBounds(this.x, this.z)) {
-            this.x = lastPlacedPosX+random(-500, 500);
-            this.z = lastPlacedPosZ+random(-500, 500);
+            if (random(-1f, 1f) < 0f) {
+              this.x = lastPlacedPosX+random(-500, -150);
+              this.z = lastPlacedPosZ+random(-500, -150);
+            }
+            else {
+              this.x = lastPlacedPosX+random(150, 500);
+              this.z = lastPlacedPosZ+random(150, 500);
+            }
             count++;
             if (count > 100) {
               console.bugWarn("fileLoad: failed to position object within bounds. The chances of this happening should be almost impossible.");
@@ -2761,7 +2786,7 @@ public class PixelRealm extends Screen {
               else {
                 PImage im = display.errorImg;
                 // TODO: this is NOT thread-safe here!
-                if (ext.equals(engine.ENTRY_EXTENSION)) {
+                if (ext.equals(engine.ENTRY_EXTENSION())) {
                   im = engine.tryLoadImageCache(path, new Runnable() {
                     public void run() {
                       ((EntryFileObject)me).loadFromSource();
@@ -3435,7 +3460,7 @@ public class PixelRealm extends Screen {
       
       // SHORTCUT_EXTENSION[0] is the latest shortcut version.
       String folderName = file.getFilename(dir);
-      String shortcutName = folderName+"."+engine.SHORTCUT_EXTENSION;
+      String shortcutName = folderName+"."+engine.SHORTCUT_EXTENSION();
       String shortcutPath = dir+shortcutName;
       shortcutPath.replaceAll("\\\\", "/");
       
@@ -3443,7 +3468,7 @@ public class PixelRealm extends Screen {
       File f = new File(shortcutPath);
       int i = 1;
       while (f.exists()) {
-        shortcutName = file.getFilename(dir)+"-"+str(i++)+"."+engine.SHORTCUT_EXTENSION;
+        shortcutName = file.getFilename(dir)+"-"+str(i++)+"."+engine.SHORTCUT_EXTENSION();
         shortcutPath = dir+shortcutName;
         f = new File(shortcutPath);
       }
@@ -4134,7 +4159,9 @@ public class PixelRealm extends Screen {
     }
     
     private boolean outOfBounds(float x, float z) {
-      if (terrain == null) return false;
+      if (terrain == null) {
+        return false;
+      }
       float tilex = floor(x/terrain.groundSize)+1.;
       float tilez = floor(z/terrain.groundSize)+1.;
       
@@ -4583,7 +4610,7 @@ public class PixelRealm extends Screen {
           if (isolatedName.equals(file.unhide(REALM_TREE_LEGACY))) continue;
           if (isolatedName.equals(file.unhide(REALM_SKY))) continue;
           if (isolatedName.equals(file.unhide(REALM_BGM))) continue;
-          if (file.currentFiles[i].filename.equals(file.unhide(REALM_TURF))) continue;
+          if (file.currentFiles[i].filename.equals(file.unhide(REALM_DATA))) continue;
           if (isolatedName.equals("load_list")) continue;
           for (int j = 1; j < 9; j++) {
             if (isolatedName.equals(file.unhide(REALM_TREE+"-"+j))) continue;
@@ -4655,9 +4682,8 @@ public class PixelRealm extends Screen {
       if (entries != null) {
         // For now, we can't put stuff into our pockets in android mode.
         if (!isAndroid()) {
-          File[] pocketFolder = (new File(engine.APPPATH+engine.POCKET_PATH())).listFiles();
-          for (File f : pocketFolder) {
-            String path = f.getAbsolutePath().replaceAll("\\\\", "/");
+          String[] files = file.listFiles(engine.APPPATH+engine.POCKET_PATH());
+          for (String path : files) {
             String name = file.getFilename(path);
             if (name.equals(POCKET_INFO)) continue;
             
@@ -4703,7 +4729,7 @@ public class PixelRealm extends Screen {
       // TODO: unhidden files.
       
       && file.anyMusicFile(stateDirectory+REALM_BGM) == null
-      && file.exists(stateDirectory+REALM_TURF) == false;
+      && file.exists(stateDirectory+REALM_DATA) == false;
     }
     
     public void loadRealmTerrain() {
@@ -4743,9 +4769,9 @@ public class PixelRealm extends Screen {
       // Find out if the directory has a turf file.
       JSONObject jsonFile = null;
       
-      String realm_turf = REALM_TURF;
+      String realm_turf = REALM_DATA;
       if (!file.exists(dir+realm_turf)) {
-        realm_turf = file.unhide(REALM_TURF);
+        realm_turf = file.unhide(REALM_DATA);
       }
       
       if (file.exists(dir+realm_turf)) {
@@ -5092,7 +5118,7 @@ public class PixelRealm extends Screen {
       
       try {
         if (settings.getBoolean("backup_realm_files", true)) {
-          file.backupAndSaveJSON(turfJson, this.stateDirectory+REALM_TURF);
+          file.backupAndSaveJSON(turfJson, this.stateDirectory+REALM_DATA);
         }
       }
       catch (RuntimeException e) {
@@ -5465,6 +5491,8 @@ public class PixelRealm extends Screen {
       boolean found = false;
       i = 0;
       
+      String prevMusicPath = musicPath;
+      
       // TODO: Tidy this code up with file.anyMusicFile
       // Search until one of the pixelrealm-bgm with the appropriate file format is found.
       while (i < soundFileFormats.length && !found) {
@@ -5484,6 +5512,15 @@ public class PixelRealm extends Screen {
       // If none found use default bgm
       if (!found) {
         musicPath = engine.APPPATH+DEFAULT_BGM;
+      }
+      
+      // If there previously wasn't any music in the realm (default music playing) and now there is a music file
+      // (after a realm refresh), start playing the new music, provided there isn't any cassette playing...
+      
+      if (prevMusicPath.equals(engine.APPPATH+DEFAULT_BGM) && !musicPath.equals(prevMusicPath)) {
+        if (!cassettePlaying()) {
+          streamMusicWithFade(musicPath);
+        }
       }
       
       // And finally, the pixelrealm-plugin
@@ -5535,6 +5572,8 @@ public class PixelRealm extends Screen {
       prevPlayerX = playerX;
       prevPlayerY = playerY;
       prevPlayerZ = playerZ;
+      
+      boolean moving = false;
       
       if (!movementPaused) {
         
@@ -5594,6 +5633,7 @@ public class PixelRealm extends Screen {
           gotoRealm(file.getPrevDir(stateDirectory), stateDirectory);
           stats.increase("previous_directory_traversals", 1);
         }
+        moving = true;
       }
   
       
@@ -5642,11 +5682,23 @@ public class PixelRealm extends Screen {
               
               
               if (input.keyAction("move_slow", TWEngine.InputModule.SHIFT_KEY)) {
-                if (input.keyAction("turn_right", 'e')) rot = -SLOW_TURN_SPEED*display.getDelta();
-                if (input.keyAction("turn_left", 'q')) rot =  SLOW_TURN_SPEED*display.getDelta();
+                if (input.keyAction("turn_right", 'e')) {
+                  rot = -SLOW_TURN_SPEED*display.getDelta();
+                  moving = true;
+                }
+                if (input.keyAction("turn_left", 'q')) {
+                  rot =  SLOW_TURN_SPEED*display.getDelta();
+                  moving = true;
+                }
               } else {
-                if (input.keyAction("turn_right", 'e')) rot = -TURN_SPEED*display.getDelta();
-                if (input.keyAction("turn_left", 'q')) rot =  TURN_SPEED*display.getDelta();
+                if (input.keyAction("turn_right", 'e')) {
+                  rot = -TURN_SPEED*display.getDelta();
+                  moving = true;
+                }
+                if (input.keyAction("turn_left", 'q')) {
+                  rot =  TURN_SPEED*display.getDelta();
+                  moving = true;
+                }
               }
       
           }
@@ -5658,6 +5710,8 @@ public class PixelRealm extends Screen {
             movex *= allowance;
             movez *= allowance;
           }
+          
+          moving |= isWalking;
   
 
           
@@ -5755,6 +5809,7 @@ public class PixelRealm extends Screen {
           
           // --- Jump & gravity physics ---
           if (input.keyAction("jump", ' ') && cameraControl == 0) {
+            moving = true;
             float jumpStrength = JUMP_STRENGTH;
             if (isInWater) {
               yvel = min(yvel+SWIM_UP_SPEED, UNDERWATER_TEMINAL_VEL);
@@ -5867,11 +5922,13 @@ public class PixelRealm extends Screen {
           
           if (currentTool == TOOL_GRABBER) {
             if (input.keyActionOnce("inventory_select_left", ',') && holdingItemIndex > 0 && holdingItemIndex < hotbar.size()) {
+              moving = true;
               launchWhenPlaced = false;
               updateHoldingItem(holdingItemIndex-1);
               sound.playSound("pickup");
             }
             if (input.keyActionOnce("inventory_select_right", '.') && holdingItemIndex < hotbar.size()-1) {
+              moving = true;
               launchWhenPlaced = false;
               updateHoldingItem(holdingItemIndex+1);
               sound.playSound("pickup");
@@ -5889,10 +5946,12 @@ public class PixelRealm extends Screen {
               
               // Actual control handle
               if (input.keyAction("scale_up", '=') && itemSize <= MAX_ITEM_SIZE) {
+                moving = true;
                 itemSize *= pow(1.01, display.getDelta());
                 holdingItem.setSize(itemSize);
               }
               else if (input.keyAction("scale_down", '-') && itemSize > MIN_ITEM_SIZE) {
+                moving = true;
                 itemSize *= pow(0.99, display.getDelta());
                 holdingItem.setSize(itemSize);
               }
@@ -5914,6 +5973,7 @@ public class PixelRealm extends Screen {
             // Index 0 = random
             // Index 1-9 = tree texture at fixed size.
             if (input.keyActionOnce("next_subtool", ']')) {
+              moving = true;
               sound.playSound("menu_select");
               subTool++;
               if (subTool > numTreeTextures) {
@@ -5933,6 +5993,7 @@ public class PixelRealm extends Screen {
               }
             }
             if (input.keyActionOnce("prev_subtool", '[')) {
+              moving = true;
               sound.playSound("menu_select");
               subTool--;
               if (subTool < 0) {
@@ -5961,10 +6022,12 @@ public class PixelRealm extends Screen {
               
               // Actual control handle
               if (input.keyAction("scale_up", '=') && manualTreeSize <= MAX_TREE_SIZE) {
+                moving = true;
                 manualTreeSize *= pow(1.01, display.getDelta());
                 previewTree.setSize(manualTreeSize);
               }
               else if (input.keyAction("scale_down", '-') && manualTreeSize > MIN_TREE_SIZE) {
+                moving = true;
                 manualTreeSize *= pow(0.99, display.getDelta());
                 previewTree.setSize(manualTreeSize);
               }
@@ -5985,6 +6048,13 @@ public class PixelRealm extends Screen {
       }
       
       wasOnGround = onGround();
+      
+      if (!moving && !movementPaused && cameraControl == 0) {
+        nonMovingTime += display.getDelta();
+      }
+      else {
+        nonMovingTime = 0f;
+      }
     }
     
     private void handleGrowShrinkSounds() {
@@ -7080,7 +7150,7 @@ public class PixelRealm extends Screen {
             
           if (getHoldingItemPRObject() instanceof ImageFileObject) {
             ImageFileObject imgobject = (ImageFileObject)getHoldingItemPRObject();
-            imgobject.rot = direction+HALF_PI;
+            imgobject.rot = direction-HALF_PI;
           }
           else if (getHoldingItemPRObject() instanceof MusicFileObject) {
             MusicFileObject imgobject = (MusicFileObject)getHoldingItemPRObject();
@@ -7585,6 +7655,11 @@ public class PixelRealm extends Screen {
   }
   
   protected void streamMusicWithFade(String path) {
+    // A very cheap bug fix to somewhere in the code
+    if (path.equals("")) {
+      path = engine.APPPATH+REALM_BGM_DEFAULT;
+    }
+    
     if (!cassettePlaying.equals("")) {
       cassettePlaying = "";
     }
@@ -7857,6 +7932,12 @@ public class PixelRealm extends Screen {
   // ----- Pixel Realm logic code -----
   private void runPixelRealm() {
     
+    // If we're standing still for long enough, reduce the framerate to reduce power usage in this "screensaver" state
+    if (nonMovingTime > 1320f) {
+      power.setSleepy();
+    }
+    else if (power.getSleepyMode()) power.setAwake();
+    
     // Pre-rendering stuff.
     portalCoolDown -= display.getDelta();
     animationTick += display.getDelta();
@@ -8014,8 +8095,6 @@ public class PixelRealm extends Screen {
     stats.recordTime("REALMTIME_"+currRealm.stateFilename);
     
     engine.timestamp("done");
-    
-    
   }
   
   
@@ -8024,7 +8103,6 @@ public class PixelRealm extends Screen {
   // --- Screen standard code ---
   
   public void content() {
-    if (engine.power.getSleepyMode()) engine.power.setAwake();
     runPixelRealm(); 
     stats.increase("total_frames_pixelrealm", 1);
   }

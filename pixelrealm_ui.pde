@@ -21,6 +21,7 @@ public class PixelRealmWithUI extends PixelRealm {
   
   // We have this outside the pocket class because it's nice for it to remember which tab we're on.
   private int selectedPocketTab = 0;
+  private int pocketLastShiftClickIndex = 0;
 
   
   // Dear god I really need to re-do this entire tutorial at some point.
@@ -565,7 +566,7 @@ public class PixelRealmWithUI extends PixelRealm {
               currRealm.terraformWarning = false;
             }
           };
-          menu = new YesNoMenu("Old version", "This realm uses an older save file version which does not support terrain options. Would you like to upgrade the realm save file?", ryes, rno);
+          menu = new YesNoMenu("Old version", "This realm uses an older file version which does not support terrain options. Would you like to upgrade the realm file?", ryes, rno);
         }
         else {
           sound.playSound("menu_select");
@@ -585,7 +586,7 @@ public class PixelRealmWithUI extends PixelRealm {
       // --- Gardner tool ---
       if (ui.buttonVary("gardener_1", "gardener_tool_128", "Gardener")) {
         if (currRealm.versionCompatibility == 1) {
-          menu = new DialogMenu("Can't use morpher", "back-newrealm", "This realm uses an older version and you can't use the gardener tool here. Please upgrade by selecting \"Terrain\" from the menu to use this tool.");
+          menu = new DialogMenu("Can't use morpher", "back-newrealm", "This realm uses an older file version and the gardener tool can't be used here. Please upgrade by selecting \"Terrain\" from the menu.");
         }
         else {
           switchTool(TOOL_GARDENER);
@@ -597,7 +598,7 @@ public class PixelRealmWithUI extends PixelRealm {
       // --- Morpher tool ---
       if (ui.buttonVary("morpher_1", "morpher_tool_128", "Morpher")) {
         if (currRealm.versionCompatibility == 1) {
-          menu = new DialogMenu("Can't use morpher", "back-newrealm", "This realm uses an older version and you can't use the morpher tool here. Please upgrade by selecting \"Terrain\" from the menu to use this tool.");
+          menu = new DialogMenu("Can't use morpher", "back-newrealm", "This realm uses an older file version and the morpher tool can't be used here. Please upgrade by selecting \"Terrain\" from the menu.");
         }
         else {
           switchTool(TOOL_MORPHER);
@@ -891,7 +892,7 @@ public class PixelRealmWithUI extends PixelRealm {
             return;
           }
 
-          String path = currRealm.stateDirectory+engine.promptInput+"."+engine.ENTRY_EXTENSION;
+          String path = currRealm.stateDirectory+engine.promptInput+"."+engine.ENTRY_EXTENSION();
           if (file.exists(path)) {
             sound.playSound("nope");
             console.log(engine.promptInput+" already exists!");
@@ -1107,9 +1108,14 @@ public class PixelRealmWithUI extends PixelRealm {
       }
       
       public int findFreeCell() {
+        return findFreeCell(0);
+      }
+      
+      public int findFreeCell(int startingFrom) {
         for (int i = 0; i < grid.length; i++) {
-          if (grid[i] == null) {
-            return i;
+          int gridIndex = (startingFrom+i)%grid.length;
+          if (grid[gridIndex] == null) {
+            return gridIndex;
           }
         }
         
@@ -1136,41 +1142,40 @@ public class PixelRealmWithUI extends PixelRealm {
         HashSet<Integer> takenCells = new HashSet<Integer>();
         
         // God I really need to move this functionality to the engine code.
-        File[] pocketFolder = (new File(engine.APPPATH+engine.POCKET_PATH())).listFiles();
-          for (File f : pocketFolder) {
-            String path = f.getAbsolutePath().replaceAll("\\\\", "/");
-            String name = file.getFilename(path);
-            if (name.equals(POCKET_INFO)) continue;
-            
-            JSONObject o = pocketInfo.getJSONObject(name);
-            if (o != null) {
-              // "coll" : 2  means it's in the hotbar
-              if (o.getInt("coll", 1) == coll) {
-                
-                int freeSpot = 0;
-                if (o.isNull("loc")) freeSpot = findFreeCell();
-                
-                // If an item has the same cell location as another item, it will simply override the previous item,
-                // making it appear as if it never existed in the dir (even tho it does exist in the pockets folder)
-                // so overlaps need to be dealt with.
-                // There are points in the program (especially with swapping files in the realms tab) where files might
-                // be moved to the same cells as other items because of nested moves and errors occuring, so this is
-                // pretty important when those errors occur.
-                int cell = o.getInt("loc", freeSpot);
-                if (takenCells.contains(cell)) { 
-                  // Space taken, find a random spot instead.
-                  cell = findFreeCell();
-                }
-                grid[cell] = currRealm.loadPocketItem(path);
-                takenCells.add(cell);
+        String[] paths = file.listFiles(engine.APPPATH+engine.POCKET_PATH());
+        for (String path : paths) {
+          String name = file.getFilename(path);
+          if (name.equals(POCKET_INFO)) continue;
+          
+          JSONObject o = pocketInfo.getJSONObject(name);
+          if (o != null) {
+            // "coll" : 2  means it's in the hotbar
+            if (o.getInt("coll", 1) == coll) {
+              
+              int freeSpot = 0;
+              if (o.isNull("loc")) freeSpot = findFreeCell();
+              
+              // If an item has the same cell location as another item, it will simply override the previous item,
+              // making it appear as if it never existed in the dir (even tho it does exist in the pockets folder)
+              // so overlaps need to be dealt with.
+              // There are points in the program (especially with swapping files in the realms tab) where files might
+              // be moved to the same cells as other items because of nested moves and errors occuring, so this is
+              // pretty important when those errors occur.
+              int cell = o.getInt("loc", freeSpot);
+              if (takenCells.contains(cell)) { 
+                // Space taken, find a random spot instead.
+                cell = findFreeCell();
               }
-            }
-            // If not found in the JSON file and we're loading the pocket, find a slot in the inventory for it.
-            else if (coll == 1) {
-              int cell = findFreeCell();
               grid[cell] = currRealm.loadPocketItem(path);
               takenCells.add(cell);
             }
+          }
+          // If not found in the JSON file and we're loading the pocket, find a slot in the inventory for it.
+          else if (coll == 1) {
+            int cell = findFreeCell();
+            grid[cell] = currRealm.loadPocketItem(path);
+            takenCells.add(cell);
+          }
         }
       }
       
@@ -1563,6 +1568,9 @@ public class PixelRealmWithUI extends PixelRealm {
           beginSwapIfOccupied();
           moveItemToNewCell(POCKET);
           
+          // Save last move position so shift-click conveniently places items next to each other in the last remembered place.
+          pocketLastShiftClickIndex = itemIndex;
+          
           performSwap();
           return;
         }
@@ -1601,6 +1609,9 @@ public class PixelRealmWithUI extends PixelRealm {
           // Swap places (move the item to the original cell)
           beginSwapIfOccupied();
           moveItemToNewCell(POCKET);
+          
+          // Save last move position so shift-click conveniently places items next to each other in the last remembered place.
+          pocketLastShiftClickIndex = itemIndex;
           
           // If we're moving from the realms grid, refresh assets
           // Definitely not the most efficient approach in terms of performance.
@@ -1644,6 +1655,7 @@ public class PixelRealmWithUI extends PixelRealm {
             itemIndex = hotbarGrid.findFreeCell();
             currGrid = hotbarGrid;
             moveItemToNewCell(HOTBAR);
+            pocketLastShiftClickIndex = itemIndex;   // Save now-empty slot we just moved item out of
             
             switchToGrabberOnExit = true;
           }
@@ -1686,14 +1698,14 @@ public class PixelRealmWithUI extends PixelRealm {
               if (itemIndex == -1) itemIndex = realmGridFindFreeSlot(TREE_TEXTURE_SLOT, TREE_TEXTURE_SLOT+9);
               if (itemIndex == -1 && realmGrid.grid[GROUND_TEXTURE_SLOT] == null) itemIndex = GROUND_TEXTURE_SLOT;
             }
-            
-            
           }
           // End image check
           
+          // Audio
           else if (file.isAudioFile(draggingItem.name)) {
             if (currGrid.grid[MUSIC_SLOT] == null) itemIndex = MUSIC_SLOT;
           }
+          // End audio check
           
           // Slot has been found
           if (itemIndex != -1) {
@@ -1701,6 +1713,7 @@ public class PixelRealmWithUI extends PixelRealm {
             // rename the file to .pixelrealm- (etc), if successful move item and perform swaps if necessary.
             if (moveIntoRealmFileSlot()) {
               moveItemToNewCell(REALM);
+              pocketLastShiftClickIndex = itemIndex;   // Save now-empty slot we just moved item out of
             }
             else {
               // If the move fails, we have a complicated situation because if we swapped the file, there's no easy way to
@@ -1775,9 +1788,11 @@ public class PixelRealmWithUI extends PixelRealm {
         currGrid = pocketsGrid;
         
         try {
-          // We gotta set these for ourselves.
-          itemIndex = pocketsGrid.findFreeCell();
+          // If no prior slot is remembered, find a new slot
+          itemIndex = pocketsGrid.findFreeCell(pocketLastShiftClickIndex);
+          pocketLastShiftClickIndex = itemIndex;
           currGrid = pocketsGrid;
+          
           
           // Move item into pocket (will sync item if unsynced)
           rpause();
@@ -1980,7 +1995,8 @@ public class PixelRealmWithUI extends PixelRealm {
         
         try {
           // We gotta set these for ourselves.
-          itemIndex = pocketsGrid.findFreeCell();
+          itemIndex = pocketsGrid.findFreeCell(pocketLastShiftClickIndex);
+          pocketLastShiftClickIndex = itemIndex;
           currGrid = pocketsGrid;
           
           // Move item into pocket (will sync item if unsynced)
@@ -2561,7 +2577,7 @@ public class PixelRealmWithUI extends PixelRealm {
         
         // Dismiss button (no input prompt)
         else {
-          if (ui.button("pockets_prompt_close", "cross_128", "Dismiss")) {
+          if (ui.button("pockets_prompt_close", "cross_128", "Dismiss") || input.enterOnce) {
             sound.playSound("menu_select");
             promptMessage = null;
           }
@@ -2686,10 +2702,10 @@ public class PixelRealmWithUI extends PixelRealm {
         }
       }
       else {
-        File realms = new File(engine.APPPATH+engine.TEMPLATES_PATH());
-        for (File f : realms.listFiles()) {
-          if (f.isDirectory()) {
-            templates.add(file.directorify(f.getAbsolutePath()));
+        String[] paths = file.listFiles(engine.APPPATH+engine.TEMPLATES_PATH());
+        for (String path : paths) {
+          if (file.isDirectory(path)) {
+            templates.add(file.directorify(path));
           }
         }
       }
@@ -2748,11 +2764,11 @@ public class PixelRealmWithUI extends PixelRealm {
       // stop the music before it's even loaded, resulting in the stop not being registered and the music beginning
       // playback when there's already other music playing.
       // To prevent this, use the good ol' hard wait method to force us to slow down a bit.
-      while (!sound.musicReady()) {
-        delay(50);
+      sound.musicLoadForceWait();
+      if (!cassettePlaying()) {
+        sound.stopMusic();
+        sound.streamMusic(currRealm.musicPath);
       }
-      sound.stopMusic();
-      sound.streamMusic(currRealm.musicPath);
     }
     
     
@@ -2771,7 +2787,6 @@ public class PixelRealmWithUI extends PixelRealm {
         ArrayList<String> movefiles = new ArrayList<String>();
         // get the realm files
         String realmDir = file.directorify(templates.get(tempIndex));
-        File realmfile = new File(realmDir);
         String dest = file.directorify(currRealm.stateDirectory);
         
         
@@ -2793,18 +2808,13 @@ public class PixelRealmWithUI extends PixelRealm {
           }
         }
         else {
-          for (File f : realmfile.listFiles()) {
-            String src = f.getAbsolutePath().replaceAll("\\\\", "/");
+          String[] paths = file.listFiles(realmDir);
+          for (String src : paths) {
             String name = file.getFilename(src);
   
             // The realmtemplate file is an exception
             if (name.equals(TEMPLATE_METADATA_FILENAME) || name.equals("load_list.txt"))
               continue;
-  
-            //if (file.exists(dest+name)) {
-            //  conflict = true;
-            //  break;
-            //}
   
             movefiles.add(src);
           }
@@ -3647,28 +3657,30 @@ public class PixelRealmWithUI extends PixelRealm {
         sound.playSound("select_general");
     }
     
-    if (musicInfo.length() > 0 && menuShown && menu != null && menu instanceof NewRealmMenu) {
-      app.textFont(engine.DEFAULT_FONT, 30);
-      app.textAlign(RIGHT, CENTER);
-      float x = WIDTH-20;
-      float y = HEIGHT-myLowerBarWeight/2;
-      app.fill(0);
-      app.text(musicInfo, x, y);
-      // Glowing text
-      color c = color(255, 200, 192.+sin(display.getTime()*0.1)*64. );
-      app.fill(c);
-      app.text(musicInfo, x-2, y-2);
-
-      // Music icon.
-      float wi = textWidth(musicInfo);
-      app.tint(0);
-      display.imgCentre("music", x-wi-30+2, y+2, 40, 40);
-      app.tint(c);
-      display.imgCentre("music", x-wi-30, y, 40, 40);
-      app.noTint();
-
-      if (musicURL.length() > 0 && input.mouseY() > (HEIGHT-myLowerBarWeight) && input.mouseX() > WIDTH/2f && input.primaryOnce) {
-        app.link(musicURL);
+    if (menuShown && menu != null && menu instanceof NewRealmMenu) {
+      if (musicInfo.length() > 0) {
+        app.textFont(engine.DEFAULT_FONT, 30);
+        app.textAlign(RIGHT, CENTER);
+        float x = WIDTH-20;
+        float y = HEIGHT-myLowerBarWeight/2;
+        app.fill(0);
+        app.text(musicInfo, x, y);
+        // Glowing text
+        color c = color(255, 200, 192.+sin(display.getTime()*0.1)*64. );
+        app.fill(c);
+        app.text(musicInfo, x-2, y-2);
+  
+        // Music icon.
+        float wi = textWidth(musicInfo);
+        app.tint(0);
+        display.imgCentre("music", x-wi-30+2, y+2, 40, 40);
+        app.tint(c);
+        display.imgCentre("music", x-wi-30, y, 40, 40);
+        app.noTint();
+  
+        if (musicURL.length() > 0 && input.mouseY() > (HEIGHT-myLowerBarWeight) && input.mouseX() > WIDTH/2f && input.primaryOnce) {
+          app.link(musicURL);
+        }
       }
     } 
     else if (cassettePlaying()) {
@@ -3942,10 +3954,9 @@ public class PixelRealmWithUI extends PixelRealm {
       
       int count = 0;
       // Now loop and cache each file.
-      File realms = new File(engine.APPPATH+engine.TEMPLATES_PATH());
-      for (File f : realms.listFiles()) {
-        if (f.isDirectory()) {
-          String dir = (file.directorify(f.getAbsolutePath().replaceAll("\\\\", "/")));
+      String[] paths = file.listFiles(engine.APPPATH+engine.TEMPLATES_PATH());
+      for (String dir : paths) {
+        if (file.isDirectory(dir)) {
           String path = "";
           // Find .pixelrealm-bgm
           // either .wav, .mp3 or .ogg.

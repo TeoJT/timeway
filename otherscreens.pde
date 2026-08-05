@@ -339,7 +339,7 @@ public class Explorer extends Screen {
             console.log("Please enter a valid entry name!");
             return;
           }
-          String entryname = file.currentDir+engine.promptInput+"."+engine.ENTRY_EXTENSION;
+          String entryname = file.currentDir+engine.promptInput+"."+engine.ENTRY_EXTENSION();
           new File(entryname).mkdirs();
           refreshDir();
           requestScreen(new Editor(engine, entryname));
@@ -795,7 +795,7 @@ public class RecycleBinScreen extends Screen {
             
             String location = engine.APPPATH+file.RECYCLE_BIN_PATH+originalFilenames.get(i);
             
-            if (originalExts.get(i).equals(engine.ENTRY_EXTENSION)) {
+            if (originalExts.get(i).equals(engine.ENTRY_EXTENSION())) {
               file.openEntryReadonly(location);
             }
             else {

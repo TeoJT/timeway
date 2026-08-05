@@ -8,6 +8,7 @@ precision mediump float;
 uniform float u_time;
 uniform vec2 pixelRes;
 uniform sampler2D texture;
+uniform vec4 tintColor;
 varying vec4 vertTexCoord;
 varying vec4 vertColor;
 
@@ -31,22 +32,11 @@ void main(void)
     vec2 st = vertTexCoord.xy;
     
     vec2 tt = st.xy*pixelRes.xy;
-    //tt.x *= 2.;
-	
-    //tt.y = 1.-tt.y;
-    
-    //st.x *= u_resolution.x/u_resolution.y;
-    //st *= 1.1;
-    //st.x *= 2.;
 	
 	st.x -= 0.15;
 	st.x *= 1.5;
-
-    
     
     float t = u_time*speed*PI;
-    //float t = (ti-floor(ti))*PI;
-    
     
     float wobble = cos((st.y+st.x)*frequency*2.+t) * intensity * sin(st.x*frequency + t);
     
@@ -64,6 +54,6 @@ void main(void)
     
     color *= color.g >= 0.99 ? texture2D(texture, tt).rgb : vec3(1.0);
     
-    gl_FragColor = vec4(color, opacity) * vertColor;
+    gl_FragColor = vec4(color, opacity) * vertColor * tintColor;
 	//gl_FragColor = texture2D(texture, tt).rgba;
 }

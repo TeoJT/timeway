@@ -328,3 +328,9 @@ public class AndroidMedia {
     return false;
   }
 }
+
+
+public void setTitle(String title) {
+  
+    surface.setTitle(title);
+}

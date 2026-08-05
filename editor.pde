@@ -1795,6 +1795,7 @@ public class Editor extends Screen {
         }
     }
     
+    protected boolean mouseHoverHighlightingEnabled = true;
     
     public class ButtonPlaceable extends TextPlaceable {
       
@@ -1832,7 +1833,7 @@ public class Editor extends Screen {
             
             app.stroke(255f);
             app.strokeWeight(1f);
-            if (ui.mouseInArea(x, y, wi, hi)) {
+            if (ui.mouseInArea(x, y, wi, hi) && mouseHoverHighlightingEnabled) {
               app.fill(rgbHover); 
             }
             else {
@@ -2377,7 +2378,7 @@ public class Editor extends Screen {
               power.setAwake();
               if (editingPlaceable != null && editingPlaceable instanceof TextPlaceable) {
                   TextPlaceable editingTextPlaceable = (TextPlaceable)editingPlaceable;
-                  selectedFontSize = editingTextPlaceable.fontSize + 2;
+                  selectedFontSize = (float)int(editingTextPlaceable.fontSize + 2);
                   editingTextPlaceable.fontSize = selectedFontSize;
               }
               else {
@@ -2391,7 +2392,7 @@ public class Editor extends Screen {
               power.setAwake();
               if (editingPlaceable != null && editingPlaceable instanceof TextPlaceable) {
                   TextPlaceable editingTextPlaceable = (TextPlaceable)editingPlaceable;
-                  selectedFontSize = editingTextPlaceable.fontSize - 2;
+                  selectedFontSize = (float)int(editingTextPlaceable.fontSize - 2);
                   editingTextPlaceable.fontSize = selectedFontSize;
               }
               else {
@@ -2429,6 +2430,41 @@ public class Editor extends Screen {
                   TextPlaceable editingTextPlaceable = (TextPlaceable)editingPlaceable;
                   // Doesn't really do anything yet really.
                   editingTextPlaceable.fontSize = selectedFontSize;
+                  
+                  final float[] fontSizes = {
+                    10f,
+                    10.5f,
+                    11f,
+                    12f,
+                    14f,
+                    16f,
+                    18f,
+                    20f,
+                    22f,
+                    24f,
+                    26f,
+                    28f,
+                    36f,
+                    48f,
+                    72f,
+                    96f,
+                    120f,
+                    144f
+                  };
+                  
+                  String[] labels = new String[fontSizes.length];
+                  Runnable[] actions = new Runnable[fontSizes.length];
+                  
+                  for (int i = 0; i < fontSizes.length; i++) {
+                    final int fontSizeIndex = i;
+                    labels[i] = fontSizes[fontSizeIndex]-floor(fontSizes[fontSizeIndex]) <= 0.0001f ? str(int(fontSizes[fontSizeIndex])) : str(fontSizes[fontSizeIndex]);
+                    actions[i] = new Runnable() {public void run() {
+                      selectedFontSize = fontSizes[fontSizeIndex];
+                      editingTextPlaceable.fontSize = fontSizes[fontSizeIndex];
+                    }};
+                  }
+                  
+                  ui.createOptionsMenu(labels, actions);
               }
           }
   
@@ -2544,12 +2580,12 @@ public class Editor extends Screen {
     // New name without the following path.
     // TODO: safer to move instead of delete
     public void renameEntry(String newName) {
-      String newPath = entryDir+newName+"."+engine.ENTRY_EXTENSION;
+      String newPath = entryDir+newName+"."+engine.ENTRY_EXTENSION();
       boolean success = file.mv(entryPath, newPath);
       
       if (success) {
         entryPath = newPath;
-        console.log("Entry renamed to "+newName+"."+engine.ENTRY_EXTENSION);
+        console.log("Entry renamed to "+newName+"."+engine.ENTRY_EXTENSION());
       }
       else {
         console.warn("Failed to rename file.");
@@ -3914,11 +3950,16 @@ public class KeybindSettingsScreen extends ReadOnlyEditor {
     app.textFont(engine.DEFAULT_FONT, 24);
     app.textAlign(CENTER, CENTER);
     
+    // Reset to true by default.
+    mouseHoverHighlightingEnabled = true;
+    
     // "Enter keybind..." dialog
     if (enterInputPrompt) {
       // UI system
       ui.useSpriteSystem(readonlyEditorUI);
       //readonlyEditorUI.interactable = true;
+      
+      mouseHoverHighlightingEnabled = false;
       
       // Background (and get position of background)
       readonlyEditorUI.sprite("keybinding_prompt_back", "black");
@@ -3937,16 +3978,19 @@ public class KeybindSettingsScreen extends ReadOnlyEditor {
       // Keypress/mouse click detection
       if (input.anyKeyOnce()) {
         enterInputPrompt = false;  // close menu
+        sound.playSound("select_any");
         settings.setKeybinding(settingKey, input.getLastKeyPressed());    // Set the keybinding
         getButton(settingKey).text = input.keyTextForm(input.getLastKeyPressed());   // Update the display text in the button.
       }
       else if (input.primaryOnce) {
         enterInputPrompt = false;  // close menu
+        sound.playSound("select_any");
         settings.setKeybinding(settingKey, TWEngine.InputModule.LEFT_CLICK);   // Set the mouesbinding
         getButton(settingKey).text = "Left click";   // Update the display text in the button.
       }
       else if (input.secondaryOnce) {
         enterInputPrompt = false;  // close menu
+        sound.playSound("select_any");
         settings.setKeybinding(settingKey, TWEngine.InputModule.RIGHT_CLICK);   // Set the mouesbinding
         getButton(settingKey).text = "Right click";   // Update the display text in the button.
       }
@@ -3957,6 +4001,8 @@ public class KeybindSettingsScreen extends ReadOnlyEditor {
       // Sprites
       ui.useSpriteSystem(readonlyEditorUI);
       //readonlyEditorUI.interactable = true;
+      
+      mouseHoverHighlightingEnabled = false;
       
       // Background
       readonlyEditorUI.sprite("keybinding_reset_back", "black");

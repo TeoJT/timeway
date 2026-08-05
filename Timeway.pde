@@ -164,7 +164,7 @@ void setup() {
     timewayEngine.startScreen(new Startup(timewayEngine));
     
     // Engine is ready and going, set title.
-    surface.setTitle(timewayEngine.getAppName());
+    setTitle(timewayEngine.getAppName());
     
     // Print a lil information to the terminal as a bonus :P
     println("\n***** "+timewayEngine.getAppName()+" "+timewayEngine.getVersion()+" *****");
