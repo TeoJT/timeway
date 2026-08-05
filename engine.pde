@@ -5524,7 +5524,7 @@ public class TWEngine {
     openTouchKeyboard();
   }
 
-  public void displayInputPrompt() {
+  private void displayInputPrompt() {
     if (inputPromptShown) {
       
       promptInput = input.getTyping(promptInput, false);
@@ -5562,6 +5562,51 @@ public class TWEngine {
       app.textSize(30);
       app.text(input.keyboardMessageDisplay(promptInput), display.WIDTH/2, display.HEIGHT/2);
     }
+  }
+  
+  private void displayCommandPrompt() {
+      // Display the command prompt if shown.
+      app.pushMatrix();
+      app.scale(display.getScale());
+      app.noStroke();
+      
+      float promptWi = 600;
+      float promptHi = 250;
+      
+      // Show help page if /help used.
+      if (showCommandHelpPage) {
+        app.fill(0f, 140f);
+        app.rect(currScreen.WIDTH*0.125f, currScreen.myUpperBarWeight+10f, currScreen.WIDTH*0.75f, promptHi-20f);  // Back
+        app.rect(currScreen.WIDTH*0.125f, currScreen.myUpperBarWeight+10f, currScreen.WIDTH*0.75f, 40f);  // Top bar
+        
+        // Lil x button
+        boolean xclicked = ui.buttonImg("cross_128", currScreen.WIDTH*0.875f-40f, currScreen.myUpperBarWeight+10f, 40f, 40f);
+        
+        // Close help page when clicked
+        if (xclicked) {
+          showCommandHelpPage = false;
+          sound.playSound("select_any");
+        }
+        
+        app.fill(255f);
+        app.textFont(DEFAULT_FONT, 38f);
+        app.textAlign(LEFT, TOP);
+        app.text("Command help", currScreen.WIDTH*0.125f+5f, currScreen.myUpperBarWeight+12f);
+        
+        // Show contents
+        display.clip(currScreen.WIDTH*0.125f, currScreen.myUpperBarWeight+50f, currScreen.WIDTH*0.75f, promptHi-60f);
+        app.textFont(DEFAULT_FONT, 20f);
+        helpPageScroll = input.processScroll(helpPageScroll, 0f, helpPageHeight-promptHi);
+        app.text(helpPageContent, currScreen.WIDTH*0.125f+20f, currScreen.myUpperBarWeight+55f+helpPageScroll, currScreen.WIDTH*0.75f-25f, 99999f);
+        display.noClip();
+      }
+      
+      app.fill(0, 127);
+      app.noStroke();
+      app.rect(display.WIDTH/2-promptWi/2, display.HEIGHT/2-promptHi/2, promptWi, promptHi);
+      displayInputPrompt();
+      app.noFill();
+      app.popMatrix();
   }
 
 
@@ -6157,6 +6202,23 @@ public class TWEngine {
   public boolean commandPromptShown = false;
   public void showCommandPrompt() {
     commandPromptShown = true;
+    
+    // Load help page
+    helpPageContent = loadCommandHelpPage(APPPATH+"engine/other/command_help_page_standard.txt");
+    helpPageContent += loadCommandHelpPage(currScreen.getHelpPagePath());
+    
+    // Copy+pasted code idc
+    int newlineCount = 0;
+    for (int i = 0; i < helpPageContent.length(); i++) {
+        if (helpPageContent.charAt(i) == '\n') {
+            newlineCount++;
+        }
+    }
+    // TODO: Really need our custom text engine here...
+    // We need to know exactly the height of text when using text wrap.
+    helpPageHeight = 32f*newlineCount;
+    helpPageScroll = 0f;
+
 
     // Execute our command when the command is submitted.
     Runnable r = new Runnable() {
@@ -6186,6 +6248,21 @@ public class TWEngine {
     playWhileUnfocused = !playWhileUnfocused;
     if (playWhileUnfocused) console.log("Minimized background music enabled.");
     else console.log("Minimized background music disabled.");
+  }
+  
+  private String loadCommandHelpPage(String path) {
+    // If it doesn't exist, just quietly ignore
+    if (!file.exists(path)) {
+      return "";
+    }
+    
+    // Load the help page
+    String[] contentlist = app.loadStrings(path);
+    String content = "";
+    for (String s : contentlist) {
+      content += s+"\n";
+    }
+    return content;
   }
 
 
@@ -6220,7 +6297,6 @@ public class TWEngine {
       String arg = "";
       if (command.length() > 11) {
         arg = command.substring(11);
-        console.log(arg);
         runFor = int(arg);
       }
 
@@ -6267,7 +6343,7 @@ public class TWEngine {
       playWhileUnfocused = false;
       console.log("Background music (while focused) disabled.");
     }
-    else if (commandEquals(command, "/showfps")) {
+    else if (commandEquals(command, "/fps")) {
       if (display.showFPS()) {
         display.setShowFPS(false);
         console.log("FPS hidden.");
@@ -6308,15 +6384,14 @@ public class TWEngine {
       console.log("Garbage collector called.");
       System.gc();
     }
-    //else if (commandEquals(command, "/testrelative")) {
-    //  String fro = "C:/mydata/notebook/hazy_era/homen/006";
-    //  String to = "C:/mydata/notebook/hazy_era/homen/007";
-    //  String relative = file.getRelativeDir("C:/mydata/notebook/cold_summer/homen/006", to);
+    else if (commandEquals(command, "/help")) {
+      showCommandHelpPage = !showCommandHelpPage;
       
-    //  console.log(fro + ", " + to);
-    //  console.log(relative);
-    //  console.log(file.relativeToAbsolute(fro, relative));
-    //}
+      if (showCommandHelpPage) console.log("Help page shown.");
+      else console.log("Help page hidden.");
+      
+      showCommandPrompt();
+    }
     
     // No commands
     else if (command.length() <= 1) {
@@ -6324,7 +6399,7 @@ public class TWEngine {
     } else if (currScreen.customCommands(command)) {
       // Do nothing, we just don't want it to return "unknown command" for a custom command.
     } else {
-      console.log("Unknown command.");
+      console.log("Unknown command. Use /help for a list of commands.");
       success = false;
     }
     if (success)
@@ -8401,6 +8476,10 @@ public class TWEngine {
   private long usedMemValues[] = new long[400];;
   private int usedMemValuesIndex = 0;
   private boolean showMemUsage = false;
+  private boolean showCommandHelpPage = false;
+  private float helpPageScroll = 0f;
+  private String helpPageContent = "";
+  private float helpPageHeight = 0;
   private long[] heapFillRateValues = new long[30];
   private long lastUsedMemSize = 0;
   private long heapFillDisplayKB = 0;
@@ -8615,18 +8694,7 @@ public class TWEngine {
 
 
     if (commandPromptShown) {
-      // Display the command prompt if shown.
-      app.pushMatrix();
-      app.scale(display.getScale());
-      noStroke();
-      app.fill(0, 127);
-      app.noStroke();
-      float promptWi = 600;
-      float promptHi = 250;
-      app.rect(display.WIDTH/2-promptWi/2, display.HEIGHT/2-promptHi/2, promptWi, promptHi);
-      displayInputPrompt();
-      app.noFill();
-      app.popMatrix();
+      displayCommandPrompt();
     }
 
     counter += display.getDelta();
@@ -8855,6 +8923,11 @@ public abstract class Screen {
   @SuppressWarnings("unused")
   protected boolean customCommands(String command) {
     return false;
+  }
+
+  
+  protected String getHelpPagePath() {
+    return "";
   }
 
 

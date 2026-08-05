@@ -1,0 +1,5 @@
+*** Editor commands ***
+
+/editgui - Toggle editing of the user interface.
+/edit - Enable editing read-only entries.
+/alignbuttons - Tool for x-aligning all button elements to the mouse cursor when editing config pages.

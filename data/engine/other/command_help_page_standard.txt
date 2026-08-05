@@ -1,0 +1,20 @@
+*** Standard commands ***
+
+/help - Show this help page.
+/forcepowermode <HIGH|NORMAL|SLEEPY|MINIMAL> - Force set the frames per second. Does not save changes on restart.
+/disableforcepowermode - Set frames per second to auto. Does not save changes on restart.
+/benchmark [frames] - Run the benchmark tool. If the optional [frames] parameter is not provided, this will run for 180 frames default.
+/debuginfo - Toggle hidden debug console output, shown as grey text.
+/update - Checks for Timeway updates.
+/throwexception - Throws an unhandled exception to test crash exiting. WARNING: Causes Timeway to quit unexpectedly, you may lose unsaved changes.
+/restart - Restarts Timeway.
+/backmusic - Toggles background music when unfocused.
+/fps - Shows/hides frames per second. Does not save changes on restart.
+/cpubenchmark - Shows/hides CPU benchmark tool.
+/stopmusic - Stops the background music.
+/reloadshaders - Reloads all shaders.
+/memusage - Shows/hides the memory usage tool.
+/sleepmode - Toggles minimized mode when Timeway is not in focus.
+/gc - Calls the garbage collector.
+
+

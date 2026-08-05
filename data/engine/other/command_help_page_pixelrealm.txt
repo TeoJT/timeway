@@ -1,0 +1,20 @@
+*** Pixel Realm commands ***
+
+/refresh - Refreshes whole realm (files and assets).
+/refreshdir - Refreshes files in realm.
+/refreshassets - Refreshes realm assets.
+/tp [x] [y] [z] [dir] - Teleports player. If no parameters are provided, player will be teleported to (1000, 0, 1000).
+/regeneratetrees - Regenerates trees in the realm.
+/goto <path> - Go directly to specified path.
+/fov [x] [y] - Sets field of view. If no parameters are provided, default values are used. Does not save changes on restart.
+/unstuck - Moves out-of-bound items back into realm terrain.
+/upgrade - Upgrades old realms to newest V2 version.
+/acam - Sets controlling camera to actual camera (what is actually being rendered).
+/vcam - Sets controlling camera to virtual camera (free roaming from player).
+/pcam - Sets controlling camera back to player.
+/templates - Shows the realm templates menu.
+/tutorial - Starts the tutorial
+/playerpos - Shows/hides player position.
+/editgui - Allow editing of the GUI.
+/touchcontrols - Shows touch controls.
+/sensitivity <val> - Sets the turn sensitivity with touch controls.

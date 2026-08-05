@@ -2290,6 +2290,10 @@ public class Editor extends Screen {
       return !loading;
     }
     
+    protected String getHelpPagePath() {
+      return engine.APPPATH+"engine/other/command_help_page_editor.txt";
+    }
+    
     protected boolean customCommands(String command) {
       if (command.equals("/editgui")) {
         gui.interactable = !gui.interactable;

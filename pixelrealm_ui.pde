@@ -3936,52 +3936,6 @@ public class PixelRealmWithUI extends PixelRealm {
       promptNewRealm();
       return true;
     }
-    // To cache realm templates music
-    else if (engine.commandEquals(command, "/cachetemplates")) {
-      if (isAndroid()) {
-        console.log("Not available in Android version!");
-        return true;
-      }
-      
-      // Get arg which is how many music files to cache.
-      // Default is 10.
-      int numRealmsToCache = 10;
-      String arg = "";
-      if (command.length() > 16) {
-        arg = command.substring(16);
-        numRealmsToCache = int(arg);
-      }
-      
-      int count = 0;
-      // Now loop and cache each file.
-      String[] paths = file.listFiles(engine.APPPATH+engine.TEMPLATES_PATH());
-      for (String dir : paths) {
-        if (file.isDirectory(dir)) {
-          String path = "";
-          // Find .pixelrealm-bgm
-          // either .wav, .mp3 or .ogg.
-          path = dir+file.unhide(PixelRealm.REALM_BGM)+".wav";
-          if (!file.exists(path)) path = dir+file.unhide(PixelRealm.REALM_BGM)+".ogg";
-          if (!file.exists(path)) path = dir+file.unhide(PixelRealm.REALM_BGM)+".mp3";
-          
-          // If none exist, the default realm sound will already be cached of course. Let's continue
-          // since we won't be caching anything.
-          if (!file.exists(path)) continue;
-          
-          
-          // Remember do x times where x = our argument.
-          count++;
-          if (count > numRealmsToCache) {
-            // End it here if we reach our number of realms to cache
-            break;
-          }
-        }
-      }
-      
-      console.log("Caching music in "+numRealmsToCache+" realm templates.");
-      console.log("Please wait a bit. Caching takes some time.");
-      return true;
-    }
     else return false;
   }
 

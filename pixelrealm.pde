@@ -8358,6 +8358,9 @@ public class PixelRealm extends Screen {
   
   
   
+  protected String getHelpPagePath() {
+    return engine.APPPATH+"engine/other/command_help_page_pixelrealm.txt";
+  }
   
   public boolean customCommands(String command) {
     if (command.equals("/refresh")) {
@@ -8398,7 +8401,6 @@ public class PixelRealm extends Screen {
     // TODO: Add new realm generators and remove this
     else if (engine.commandEquals(command, "/docoolthing")) {
       for (PixelRealmState.TerrainChunkV2 chunk : currRealm.chunks.values()) {
-        console.log("aa");
         chunk.doThing();
       }
       stats.increase("cool_things_done", 1);
@@ -8406,7 +8408,7 @@ public class PixelRealm extends Screen {
     }
     else if (engine.commandEquals(command, "/regeneratetrees")) {
       currRealm.regenerateTrees();
-      console.log("Regenerated stuff.");
+      console.log("Regenerated trees.");
       return true;
     }
     else if (engine.commandEquals(command, "/goto")) {
@@ -8429,7 +8431,7 @@ public class PixelRealm extends Screen {
     else if (engine.commandEquals(command, "/fov")) {
       String[] args = getArgs(command);
       int i = 0;
-      float xy[] = {PI/3.,(float)scene.width/scene.height};
+      float xy[] = {PI/3f, (float)scene.width/scene.height};
       for (String arg : args) {
         if (i >= xy.length) break;
         xy[i++] = float(arg);
@@ -8442,7 +8444,7 @@ public class PixelRealm extends Screen {
       
       return true;
     }
-    else if (engine.commandEquals(command, "/puthere")) {
+    else if (engine.commandEquals(command, "/unstuck")) {
       int successfulRelocations = 0;
       for (PixelRealmState.PRObject p : currRealm.files) {
         int count = 0;
@@ -8468,7 +8470,7 @@ public class PixelRealm extends Screen {
     else if (engine.commandEquals(command, "/upgrade")) {
       currRealm.improvedFog2 = true;
       currRealm.terrain.update();
-      console.log(currRealm.version+" realm upgraded to newest.");
+      console.log(currRealm.version+" realm upgraded to newest version.");
       return true;
     }
     else if (engine.commandEquals(command, "/cam") || engine.commandEquals(command, "/pcam")) {
