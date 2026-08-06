@@ -6,7 +6,7 @@ import java.nio.file.*;
 import java.util.ListIterator;
 import java.util.Iterator;
 import java.io.RandomAccessFile;
-
+import java.util.Collection;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -51,8 +51,8 @@ public class PixelRealm extends Screen {
   final static float TERMINAL_VEL = 30.;
   final static float GRAVITY = 0.4;
   final static float UNDERWATER_GRAVITY = 0.1;
-  final static float JUMP_STRENGTH = 8.;
-  final static float UNDERWATER_JUMP_STRENGTH = 4.;
+  final static float JUMP_STRENGTH = 8f;
+  final static float UNDERWATER_JUMP_STRENGTH = 7f;
   final static float PLAYER_HEIGHT = 80;
   final static float PLAYER_WIDTH  = 20;
   final static float UNDERWATER_TEMINAL_VEL = 3.0;
@@ -706,6 +706,11 @@ public class PixelRealm extends Screen {
       public ItemSlot(T o) {
         this.carrying = o;
       }
+      
+      public boolean isInList() {
+        // TODO: Should check if this is the head node???
+        return next != null || prev != null;
+      }
   
       //public void remove() {
       //  if (this == head)
@@ -847,6 +852,9 @@ public class PixelRealm extends Screen {
   
       if (node.next != null)
         node.next.prev = node.prev;
+        
+      node.next = null;
+      node.prev = null;
   
       // Object should be dereferenced now.
       return node;
@@ -1512,7 +1520,7 @@ public class PixelRealm extends Screen {
     public RealmTextureUV img_tree  = new RealmTextureUV (REALM_TREE_DEFAULT);
     public RealmTextureClassic  img_sky   = new RealmTextureClassic (REALM_SKY_DEFAULT);
     protected TerrainAttributes terrain;
-    private DirectoryPortal exitPortal = null;
+    public DirectoryPortal exitPortal = null;
     private String musicPath = "";
     private String musicLastModified = "";
     private boolean loadMinimal = false;
@@ -5812,7 +5820,9 @@ public class PixelRealm extends Screen {
             moving = true;
             float jumpStrength = JUMP_STRENGTH;
             if (isInWater) {
-              yvel = min(yvel+SWIM_UP_SPEED, UNDERWATER_TEMINAL_VEL);
+              if (yvel < UNDERWATER_TEMINAL_VEL) {
+                yvel += SWIM_UP_SPEED;
+              }
               jumpStrength = UNDERWATER_JUMP_STRENGTH;
               if (jumpTimeout <= 0.) {
                 

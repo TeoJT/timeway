@@ -1069,7 +1069,7 @@ public class PixelRealmWithUI extends PixelRealm {
       
       // Set this if you want a lil space between your rows.
       public float verticalSpacing = 0f;
-      public boolean refreshRealmWhenFileDeletedFlag = false;  // This is used as a cheap way to refresh the realm when a realm asset is deleted in the realm grid.
+      public boolean refreshRealmAssetsWhenFileDeletedFlag = false;  // This is used as a cheap way to refresh the realm when a realm asset is deleted in the realm grid.
       public boolean allowRename = true;  // Another cheap way to allow/disallow renaming in the realm grid.
       private boolean touchScrolling = false;
       
@@ -1103,9 +1103,13 @@ public class PixelRealmWithUI extends PixelRealm {
       
       public void insert(ArrayList<PocketItem> arr) {
         for (int i = 0; i < arr.size(); i++) {
+          // Give up if we've run out of space.
+          if (i > grid.length-1) break;
           grid[i] = arr.get(i);
         }
       }
+      
+
       
       public int findFreeCell() {
         return findFreeCell(0);
@@ -1426,7 +1430,7 @@ public class PixelRealmWithUI extends PixelRealm {
                           grid[index] = null;
                           sound.playSound("poof");
                           
-                          if (refreshRealmWhenFileDeletedFlag) currRealm.loadRealmAssets();
+                          if (refreshRealmAssetsWhenFileDeletedFlag) currRealm.loadRealmAssets();
                         }
                         
                     }};
@@ -1534,6 +1538,8 @@ public class PixelRealmWithUI extends PixelRealm {
         // Realm
         realmGrid.reset();
         loadRealmGrid();
+        
+        // Files
       }
       catch (PocketPanicException e) {
         handlePocketPanic(e);
@@ -1603,6 +1609,12 @@ public class PixelRealmWithUI extends PixelRealm {
           // when loadhotbar() is called again on menu close.
           if (originalGridLocation == hotbarGrid) {
             removeFromHotbar(draggingItem);
+          }
+          
+          // Remove item from realm if moving from the files grid.
+          if (originalGridLocation == filesGrid) {
+            currRealm.files.remove(draggingItem.item);
+            currRealm.throwItIntoTheVoid(draggingItem.item);
           }
           
           // If there's an existing item in the cell...
@@ -1735,6 +1747,24 @@ public class PixelRealmWithUI extends PixelRealm {
           break;
           case TAB_FILES:
           
+          try {
+            // We gotta set these for ourselves.
+            if (draggingItem.pocketMove(currRealm.stateDirectory)) {
+              addFileObjectToRealm(); // Move it now, at this point it will be already added to the realm before any exceptions are thrown.
+              currGrid = filesGrid;
+              itemIndex = filesGrid.findFreeCell();
+              moveItemToNewCell(FILES);
+            }
+          }
+          catch (PocketPanicException e) {
+            // Do nothing and just print an exception thing.
+            console.log("Full but moving anyways");
+            draggingItem = null;
+          }
+          
+          // TODO: add file object to realm code.
+          
+          
           break;
         }
       }};
@@ -1824,7 +1854,7 @@ public class PixelRealmWithUI extends PixelRealm {
       realmGrid = new Grid(18*6);
       
       realmGrid.verticalSpacing = 9f;
-      realmGrid.refreshRealmWhenFileDeletedFlag = true;
+      realmGrid.refreshRealmAssetsWhenFileDeletedFlag = true;
       realmGrid.allowRename = false;
       
       // Setup the labels and slots.
@@ -2023,12 +2053,90 @@ public class PixelRealmWithUI extends PixelRealm {
       }};
       realmGrid.setShiftMoveToAction(shiftMoveRealmAction);
       
-      
       loadRealmGrid();
+      
+      
+      
+      
+      
+      // Finally, our files grid
+      filesGrid = new Grid(252);
+      
+      Runnable filesGridMoveInAction = new Runnable() {public void run() {
+        itemToSwap = null;
+        // Dragged-to cell is already occupied, perform swap
+        if (originalGridLocation == pocketsGrid) { // If moving to a different grid (pockets grid)
+          rpause();
+          
+          if (currRealm.moveFromPocket(draggingItem, file.directorify(currRealm.stateDirectory)+draggingItem.name)) {
+            addFileObjectToRealm();
+            
+            beginSwapIfOccupied();
+            moveItemToNewCell(FILES);
+          }
+          else {
+            // Failed to move item
+            returnDraggingItemToOriginalCell();
+          }
+        }
+        else { // Condition here is that this is not the pockets grid (it's a different cell in the same grid). No need to call pocketMove.
+          beginSwapIfOccupied();
+          moveItemToNewCell(FILES);
+        }
+        
+        performSwap();
+      }};
+      filesGrid.setMoveInAction(filesGridMoveInAction);
+      
+      
+      
+      Runnable shiftMoveFilesAction = new Runnable() {public void run() {
+        currGrid = pocketsGrid;
+        
+        //try {
+        //  // If no prior slot is remembered, find a new slot
+        //  itemIndex = pocketsGrid.findFreeCell(pocketLastShiftClickIndex);
+        //  pocketLastShiftClickIndex = itemIndex;
+        //  currGrid = pocketsGrid;
+          
+          
+        //  // Move item into pocket (will sync item if unsynced)
+        //  rpause();
+        //  if (draggingItem.pocketMove(currRealm.stateDirectory, moveName)) {
+        //    removeFromHotbar(draggingItem);
+        //    moveItemToNewCell(POCKET);
+        //  }
+        //  else {
+        //    // Nothing... pocketMove will show the prompt.
+        //  }
+        //}
+        //catch (PocketPanicException e) {
+        //  console.log("No more space in pockets!");
+        //  returnDraggingItemToOriginalCell();
+        //  preventShiftClick = true;
+        //}
+      }};
+      filesGrid.setShiftMoveToAction(shiftMoveFilesAction);
+      
+      loadFilesGrid();
       
       // Shouldn't need originalGridLocation but this is just to prevent a crash should there be a bug.
       originalGridLocation = pocketsGrid;
       
+    }
+    
+    private void addFileObjectToRealm() {
+      // TODO: logic to randomly assign position in front of player.
+      currRealm.files.add((PixelRealmState.FileObject)draggingItem.item);
+      // For some reason it may be removed from the ordering linked list. Maybe removed by the hotbar reload.
+      // No problem. Let's just detect and re-add.
+      if (!draggingItem.item.myOrderingNode.isInList()) {
+        currRealm.ordering.add(draggingItem.item);
+      }
+      
+      draggingItem.item.x = currRealm.playerX+100f;
+      draggingItem.item.y = currRealm.playerY;
+      draggingItem.item.z = currRealm.playerZ;
     }
     
     private void removeFromHotbar(PocketItem pitem) {
@@ -2091,6 +2199,30 @@ public class PixelRealmWithUI extends PixelRealm {
       
       // Annnnnd I'll do plugins later.
     }
+    
+    
+    private void loadFilesGrid() {
+      HashSet<PixelRealmState.PRObject> hotbarHashset = new HashSet<PixelRealmState.PRObject>();
+      for (PocketItem p : hotbar) {
+        hotbarHashset.add(p.item);
+      }
+      
+      // We're grabbing non-asset files that exist in the pixelrealm.
+      int index = 0;
+      for (PixelRealmState.FileObject file : currRealm.files) {
+        // Give up if we've run out of space.
+        if (index > filesGrid.grid.length-1) break;
+        
+        // Don't add any items we're currently holding
+        if (hotbarHashset.contains(file)) continue;
+        
+        // Don't add exit portal
+        if (file == currRealm.exitPortal) continue;
+        
+        filesGrid.grid[index++] = new PocketItem(file.filename, file, false);
+      }
+    }
+    
     
     // Rename the file if a duplicate exists in the pocket.
     // If for example Sky-2.png already exists, rename it to Sky-2 (1).png, or Sky-2 (2).png etc.
@@ -2396,7 +2528,7 @@ public class PixelRealmWithUI extends PixelRealm {
       }
     }
     
-    private final String[] tabTitles = { "Hotbar", "Realm" /*, "Files"*/ };
+    private final String[] tabTitles = { "Hotbar", "Realm", "Files" };
 
     public void display() {
       // Background
@@ -2474,6 +2606,7 @@ public class PixelRealmWithUI extends PixelRealm {
         realmGrid.display(xxx, yyy, getWidth(), hii);
         break;
         case 2:
+        filesGrid.display(xxx, yyy, getWidth(), hii);
         break;
       }
       
