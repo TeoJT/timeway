@@ -1044,6 +1044,7 @@ public class PixelRealmWithUI extends PixelRealm {
     private String promptInput = "";
     private Runnable promptInputRunWhenEnter = null;
     private float prevMouseY = 0f;
+    private float fileObjectDropX, fileObjectDropZ;
     
     private String hoverLabel = null;
     private color  hoverLabelColor = color(0);
@@ -1070,6 +1071,7 @@ public class PixelRealmWithUI extends PixelRealm {
       // Set this if you want a lil space between your rows.
       public float verticalSpacing = 0f;
       public boolean refreshRealmAssetsWhenFileDeletedFlag = false;  // This is used as a cheap way to refresh the realm when a realm asset is deleted in the realm grid.
+      public boolean teleportOnSelectFlag = false;  // When set to true, double-clicking closes menu and teleports player to item instead of opening it. Also shows "teleport" option in rclick menu.
       public boolean allowRename = true;  // Another cheap way to allow/disallow renaming in the realm grid.
       private boolean touchScrolling = false;
       
@@ -1199,6 +1201,17 @@ public class PixelRealmWithUI extends PixelRealm {
         grid[index] = new PocketItem(txt, true);
       }
       
+      private void runFileOpenAction(PocketItem pitem) {
+        if (teleportOnSelectFlag) {
+          currRealm.tpToPRObject(pitem.item);
+          close();
+          closeMenu();
+        }
+        else {
+          open(((PixelRealmState.FileObject)pitem.item).dir);
+        }
+      }
+      
       public void display(float gridx, float gridy, float wi, float hii) {
         final int SLOTS_WI = 18;
         
@@ -1322,12 +1335,16 @@ public class PixelRealmWithUI extends PixelRealm {
                   }
                   // If double-clicked, open file
                   else if (doubleClickTimer > 0f && pitem != null && pitem.item != null && pitem.item instanceof PixelRealmState.FileObject) {
-                    // TODO: This is an awful solution.
-                    if (pitem.item instanceof PixelRealmState.MusicFileObject) {
-                      playCassette(((PixelRealmState.FileObject)pitem.item).dir);
+                    // Double-click case here:
+                    // Default behavior: open file
+                    // Files grid behaviour: teleport to item
+                    if (teleportOnSelectFlag) {
+                      currRealm.tpToPRObject(pitem.item);
+                      close();
+                      closeMenu();
                     }
                     else {
-                      file.open(((PixelRealmState.FileObject)pitem.item).dir);
+                      open(((PixelRealmState.FileObject)pitem.item).dir);
                     }
                   }
                   // If single clicked, begin to drag & move file.
@@ -1355,26 +1372,15 @@ public class PixelRealmWithUI extends PixelRealm {
                   if (!pitem.abstractObject) {
                     
                     // If we're in the realm grid (or allowRename is false), only create 2 options (ommitting the "rename" option)
-                    String[] labels;
-                    Runnable[] actions;
-                    
-                    if (allowRename) {
-                      labels = new String[4];
-                      actions = new Runnable[4];
-                    }
-                    else {
-                      labels = new String[3];
-                      actions = new Runnable[3];
-                    }
+                    int optionsLength = 3;
+                    if (allowRename) optionsLength++;
+                    if (teleportOnSelectFlag) optionsLength++;
+                    String[] labels = new String[optionsLength];
+                    Runnable[] actions = new Runnable[optionsLength];
                     
                     labels[0] = "Open";
                     actions[0] = new Runnable() {public void run() {
-                        if (pitem.item instanceof PixelRealmState.MusicFileObject) {
-                          playCassette(((PixelRealmState.FileObject)pitem.item).dir);
-                        }
-                        else {
-                          file.open(((PixelRealmState.FileObject)pitem.item).dir);
-                        }
+                      open(((PixelRealmState.FileObject)pitem.item).dir);
                     }};
                     
                     
@@ -1403,7 +1409,8 @@ public class PixelRealmWithUI extends PixelRealm {
                     // We want delete (the unsafest option) to always be at the bottom, but sometimes "rename" can appear instead,
                     // so shuffle it to the bottom so "rename" can take its place.
                     int labelPos = 2;
-                    if (allowRename) labelPos = 3;
+                    if (allowRename) labelPos++;
+                    if (teleportOnSelectFlag) labelPos++;
                     
                     labels[labelPos] = "Delete";
                     actions[labelPos] = new Runnable() {public void run() {
@@ -1462,6 +1469,17 @@ public class PixelRealmWithUI extends PixelRealm {
                       }};
                     }
                     
+                    // Add teleport option
+                    if (teleportOnSelectFlag) {
+                      int labelIndex = allowRename ? 3 : 2;
+                      
+                      labels[labelIndex] = "Teleport";
+                      actions[labelIndex] = new Runnable() {public void run() {
+                        currRealm.tpToPRObject(pitem.item);
+                        close();
+                        closeMenu();
+                      }};
+                    }
                     
                     ui.createOptionsMenu(labels, actions);
                   }
@@ -1526,7 +1544,6 @@ public class PixelRealmWithUI extends PixelRealm {
         currRealm.loadHotbar();
         pocketInfo = openPocketsFile();
         
-        
         // Pocket
         pocketsGrid.reset();
         pocketsGrid.load(1);
@@ -1540,6 +1557,8 @@ public class PixelRealmWithUI extends PixelRealm {
         loadRealmGrid();
         
         // Files
+        filesGrid.reset();
+        loadFilesGrid();
       }
       catch (PocketPanicException e) {
         handlePocketPanic(e);
@@ -1746,10 +1765,10 @@ public class PixelRealmWithUI extends PixelRealm {
             
           break;
           case TAB_FILES:
-          
           try {
+            rpause();
             // We gotta set these for ourselves.
-            if (draggingItem.pocketMove(currRealm.stateDirectory)) {
+            if (currRealm.moveFromPocket(draggingItem, file.directorify(currRealm.stateDirectory)+draggingItem.name)) {
               addFileObjectToRealm(); // Move it now, at this point it will be already added to the realm before any exceptions are thrown.
               currGrid = filesGrid;
               itemIndex = filesGrid.findFreeCell();
@@ -1757,14 +1776,10 @@ public class PixelRealmWithUI extends PixelRealm {
             }
           }
           catch (PocketPanicException e) {
-            // Do nothing and just print an exception thing.
-            console.log("Full but moving anyways");
+            // Allow placing into the realm, just don't show it in the grid since we have no more space.
+            sound.playSound("pocket_placedown");
             draggingItem = null;
           }
-          
-          // TODO: add file object to realm code.
-          
-          
           break;
         }
       }};
@@ -2061,6 +2076,7 @@ public class PixelRealmWithUI extends PixelRealm {
       
       // Finally, our files grid
       filesGrid = new Grid(252);
+      filesGrid.teleportOnSelectFlag = true;
       
       Runnable filesGridMoveInAction = new Runnable() {public void run() {
         itemToSwap = null;
@@ -2091,39 +2107,43 @@ public class PixelRealmWithUI extends PixelRealm {
       
       
       Runnable shiftMoveFilesAction = new Runnable() {public void run() {
-        currGrid = pocketsGrid;
-        
-        //try {
-        //  // If no prior slot is remembered, find a new slot
-        //  itemIndex = pocketsGrid.findFreeCell(pocketLastShiftClickIndex);
-        //  pocketLastShiftClickIndex = itemIndex;
-        //  currGrid = pocketsGrid;
+        try {
+          // If no prior slot is remembered, find a new slot
+          itemIndex = pocketsGrid.findFreeCell(pocketLastShiftClickIndex);
+          pocketLastShiftClickIndex = itemIndex;
+          currGrid = pocketsGrid;
           
-          
-        //  // Move item into pocket (will sync item if unsynced)
-        //  rpause();
-        //  if (draggingItem.pocketMove(currRealm.stateDirectory, moveName)) {
-        //    removeFromHotbar(draggingItem);
-        //    moveItemToNewCell(POCKET);
-        //  }
-        //  else {
-        //    // Nothing... pocketMove will show the prompt.
-        //  }
-        //}
-        //catch (PocketPanicException e) {
-        //  console.log("No more space in pockets!");
-        //  returnDraggingItemToOriginalCell();
-        //  preventShiftClick = true;
-        //}
+          // Move item into pocket (will sync item if unsynced)
+          rpause();
+          if (draggingItem.pocketMove(currRealm.stateDirectory)) {
+            currRealm.files.remove(draggingItem.item);
+            currRealm.throwItIntoTheVoid(draggingItem.item);
+            moveItemToNewCell(POCKET);
+          }
+          else {
+            // Nothing... pocketMove will show the prompt.
+          }
+        }
+        catch (PocketPanicException e) {
+          console.log("No more space in pockets!");
+          returnDraggingItemToOriginalCell();
+          preventShiftClick = true;
+        }
       }};
       filesGrid.setShiftMoveToAction(shiftMoveFilesAction);
       
       loadFilesGrid();
       
+      // Prepare prev drop positions
+      float DIST = random(120f, 330f);
+      fileObjectDropX = currRealm.playerX+sin(currRealm.direction)*DIST+random(-60f, 60f);
+      fileObjectDropZ = currRealm.playerZ+cos(currRealm.direction)*DIST+random(-60f, 60f); 
+      
       // Shouldn't need originalGridLocation but this is just to prevent a crash should there be a bug.
       originalGridLocation = pocketsGrid;
       
     }
+    
     
     private void addFileObjectToRealm() {
       // TODO: logic to randomly assign position in front of player.
@@ -2134,9 +2154,28 @@ public class PixelRealmWithUI extends PixelRealm {
         currRealm.ordering.add(draggingItem.item);
       }
       
-      draggingItem.item.x = currRealm.playerX+100f;
-      draggingItem.item.y = currRealm.playerY;
-      draggingItem.item.z = currRealm.playerZ;
+      draggingItem.item.x = fileObjectDropX;
+      draggingItem.item.z = fileObjectDropZ;
+      draggingItem.item.y = currRealm.onSurface(fileObjectDropX, fileObjectDropZ);
+      
+      // Move new drop position slightly
+      // Readjust so that it's not too close to the player
+      if (random(0f, 1f) < 0.5f) fileObjectDropX += random(-180f, -70f);
+      else fileObjectDropX += random(70f, 180f);
+      if (random(0f, 1f) < 0.5f) fileObjectDropZ += random(-180f, -70f);
+      else fileObjectDropZ += random(70f, 180f);
+      
+      int count = 0;
+        
+      while (PApplet.pow(fileObjectDropX-currRealm.playerX, 2f)+PApplet.pow(fileObjectDropZ-currRealm.playerZ, 2f) < 30000f) {
+        if (random(0f, 1f) < 0.5f) fileObjectDropX += random(-180f, -70f);
+        else fileObjectDropX += random(70f, 180f);
+        if (random(0f, 1f) < 0.5f) fileObjectDropZ += random(-180f, -70f);
+        else fileObjectDropZ += random(70f, 180f);
+        
+        count++;
+        if (count > 100) break;
+      }
     }
     
     private void removeFromHotbar(PocketItem pitem) {
@@ -3282,7 +3321,7 @@ public class PixelRealmWithUI extends PixelRealm {
         console.warn("Couldn't locate "+file.getFilename(path));
       }
       else {
-        currRealm.tp(fobject.x-200, fobject.y, fobject.z, HALF_PI);
+        currRealm.tpToPRObject(fobject);
       }
     }
     

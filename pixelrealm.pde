@@ -1446,6 +1446,16 @@ public class PixelRealm extends Screen {
   }
   
   
+  public void open(String path) {
+    if (file.isAudioFile(path)) {
+      playCassette(path);
+    }
+    else {
+      file.open(path);
+    }
+  }
+  
+  
   //private void tint(float r, float g, float b, float a) {
   //  if (unifiedShader != null) {
   //    unifiedShader.set("tintColor", r/255f, g/255f, b/255f, a/255f);
@@ -4649,6 +4659,7 @@ public class PixelRealm extends Screen {
     }
     
     
+    
     protected void loadHotbar() {
       // This function is designed to be used during runtime, not just startup.
       // Therefore clean previous pixelrealm objects.
@@ -7301,6 +7312,36 @@ public class PixelRealm extends Screen {
       prevPlayerY = y;
       prevPlayerZ = z;
       currRealm.direction = dir;
+    }
+    
+    private boolean nearPortal() {
+      for (FileObject o : files) {
+        if (o instanceof DirectoryPortal) {
+          if (PApplet.pow(o.x-playerX, 2f)+PApplet.pow(o.z-playerZ, 2f) < 30000f) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+    
+    public void tpToPRObject(PRObject probject) {
+      float rot = HALF_PI;
+      if (probject instanceof ImageFileObject) {
+        rot = ((ImageFileObject)probject).rot+HALF_PI;
+      }
+      
+      float dist = 200f;
+      tp(probject.x+sin(rot-PI)*dist, probject.y, probject.z+cos(rot-PI)*dist, rot);
+      int count = 0;
+      while (nearPortal()) {
+        rot += 0.2f;
+        dist += 35f;
+        tp(probject.x+sin(rot-PI)*dist, probject.y, probject.z+cos(rot-PI)*dist, rot);
+        
+        count++;
+        if (count > 23) break; // If enough failed attempts, just give up and just accept we may have to enter a portal in this probability that's supposed to be extremely unlikely.
+      }
     }
     
     
